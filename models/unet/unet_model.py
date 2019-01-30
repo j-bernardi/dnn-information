@@ -5,11 +5,11 @@ from .unet_parts import *
 class UNet(nn.Module):
     """High-level U-Net model."""
 
-    def __init__(self, n_channels=9, n_classes=15):
+    def __init__(self, in_channels=32, out_channels=32, n_classes=15):
 
         super(UNet, self).__init__()
 
-        self.inc = inconv(n_channels, 64)
+        self.inc = inconv(in_channels, out_channels)
         self.down1 = down(64, 128)
         self.down2 = down(128, 256)
         self.down3 = down(256, 512)
