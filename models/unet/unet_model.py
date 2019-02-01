@@ -8,15 +8,21 @@ https://github.com/jeffkinnison/unet/blob/master/pytorch/unet3d.py
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class UNet3D(nn.Module):
     """The network."""
 
     def __init__(self, in_channel=32, n_classes=15):
         """
-        Input: (default) 32-channel 448x512x9 voxels image
-        Output: estimated probability over the 15 (default) classes
-        (for each of the 448x512x1 output voxels)
+        Archtecture modelled from (refd in DeepMind Paper):
+            https://arxiv.org/pdf/1606.06650.pdf
+        Open source modelling:
+            Based on: https://github.com/shiba24/3d-unet
+        Default:
+            Input: (default) 32-channel 448x512x9 voxels image
+            Output: estimated probability over the 15 (default) classes
+                (for each of the 448x512x1 output voxels)
         """
 
         self.in_channel = in_channel
@@ -24,125 +30,77 @@ class UNet3D(nn.Module):
 
         super(UNet3D, self).__init__()
 
-        # Define the encoders
-        """
-        # see https://arxiv.org/pdf/1606.06650.pdf
-        # 1-1, 1
-        self.ec0 = self.encoder(self.in_channel, 32, bias=False, batchnorm=False)
-        # 1-1, 2
-        self.ec1 = self.encoder(32, 64, bias=False, batchnorm=False)
-        # 2-2, 1
-        self.ec2 = self.encoder(64, 64, bias=False, batchnorm=False)
-        # 2-2, 2
-        self.ec3 = self.encoder(64, 128, bias=False, batchnorm=False)
-        # 3-3, 1
-        self.ec4 = self.encoder(128, 128, bias=False, batchnorm=False)
-        # 3-3, 2
-        self.ec5 = self.encoder(128, 256, bias=False, batchnorm=False)
-        # 4-4, 1
-        self.ec6 = self.encoder(256, 256, bias=False, batchnorm=False)
-        # 4-4, 2
-        self.ec7 = self.encoder(256, 512, bias=False, batchnorm=False)
-        """
-        # TODO: no padding to input, bilinear downsampling
+        ## ENCODING ##
+
         # Level 1-1
-        self.ec11 = self.encoder(self.in_channel, 32) # green
+        self.ec11 = self.encoder(self.in_channel, 32, padding=1, kernel_size=(3,3,1), n_convs=3) # green
         # Level 2->2
-        self.ec22 = self.encoder(32, 32) # green REDEFINE
+        self.ec22 = self.encoder(32, 32, padding=1, kernel_size=(3,3,1), n_convs=3) # green
         # Level 3->3
-        self.ec33 = self.encoder(32, 32) # green
+        self.ec33 = self.encoder(32, 32, padding=1, kernel_size=(3,3,1), n_convs=3) # green
         # Level 4->4
-        self.ec441 = self.encoder(64, 64) # green
-        self.ec442 = self.encoder(64, 64) # turquoise REDEFINE
+        self.ec441 = self.encoder(64, 64, padding=1, kernel_size=(3,3,1), n_convs=3) # green
+        self.ec442 = self.encoder(64, 64, padding=0, kernel_size=(1,1,3)) # turquoise
         # Level 5->5
-        self.ec551 = self.encoder(128, 128) # green
-        self.ec552 = self.encoder(128, 128) # turquoise
+        self.ec551 = self.encoder(128, 128, padding=1, kernel_size=(3,3,1), n_convs=3) # green
+        self.ec552 = self.encoder(128, 128, padding=0, kernel_size=(1,1,3)) # turquoise
         # Level 6->6
-        self.ec661 = self.encoder(128, 128) # green
-        self.ec662 = self.encoder(128, 128) # turquoise
+        self.ec661 = self.encoder(128, 128, padding=1, kernel_size=(3,3,1), n_convs=3) # green
+        self.ec662 = self.encoder(128, 128, padding=0, kernel_size=(1,1,3)) # turquoise
         # Level 7->7
-        self.ec771 = self.encoder(256, 256) # green
-        self.ec772 = self.encoder(256, 256) # turquoise
-        self.ec773 = self.encoder(256, 256*2) # blue
+        self.ec771 = self.encoder(256, 256, padding=1, kernel_size=(3,3,1), n_convs=3) # green
+        self.ec772 = self.encoder(256, 256, padding=0, kernel_size=(1,1,3)) # turquoise
         # level 8->8
-        self.ec88 = self.encoder(4096, 4096) # pink arrow
+        self.ec88 = self.n_linear(4096, 4096, n_layers=5) # pink arrow
 
-        # TODO: point 2, do through bilinear interpolation
-        # replace max pooling and up conv - shouldn't be needed?
-        # these become the downwards?
-        # TODO - define the convs (3x3x1, 1x1x3) (think these go in encoder, decoder?)
-        # self.down0, down1, down2
-        """
-        self.pool0 = nn.MaxPool3d(2) # l1-l2
-        self.pool1 = nn.MaxPool3d(2) # l2-l3
-        self.pool2 = nn.MaxPool3d(2) # l3-l4 (bottom)
-        """
-        self.down12 = # TODO # l1-l2
-        self.down23 = # TODO # l2-l3
-        self.down34 = # TODO # l3-l4
-        self.down45 = # TODO # l4-l5
-        self.down56 = # TODO # l5-l6
-        self.down67 = # TODO # l6-l7
-        self.down78 = # TODO # l7-l8
+        ## DOWNSAMPLING ##
 
-        # define upward decoders
-        """
-        # See: https://arxiv.org/pdf/1606.06650.pdf
-        self.dc9 = self.decoder(512, 512, kernel_size=2, stride=2, bias=False)
-        self.dc8 = self.decoder(256 + 512, 256, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc7 = self.decoder(256, 256, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc6 = self.decoder(256, 256, kernel_size=2, stride=2, bias=False)
-        self.dc5 = self.decoder(128 + 256, 128, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc4 = self.decoder(128, 128, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc3 = self.decoder(128, 128, kernel_size=2, stride=2, bias=False)
-        self.dc2 = self.decoder(64 + 128, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc1 = self.decoder(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc0 = self.decoder(64, n_classes, kernel_size=1, stride=1, bias=False)
-        """
-         # TODO - figure out kernel size, stride and bias
-         # all green on diagram
-        # Level 8->8
-        self.dc88 = self.decoder(4096, 4096)
+        self.down12 = self.bilinear(32, scale_factor=1) # TODO # l1-l2
+        self.down23 = self.bilinear(32, scale_factor=1) # TODO # l2-l3
+        self.down34 = self.bilinear(32, scale_factor=2) # TODO # l3-l4
+        self.down45 = self.bilinear(64, scale_factor=2) # TODO # l4-l5
+        self.down56 = self.bilinear(128, scale_factor=1) # TODO # l5-l6
+        self.down67 = self.bilinear(128, scale_factor=2) # TODO # l6-l7
+        self.down78 = self.bilinear(256, scale_factor=16) # TODO # l7-l8
+
+        ## DECODING AND UPSAMPLING ##
         # Level 8->7
-        self.dc87 = self.decoder(4096, 256*2, kernel_size=2, stride=2, bias=False)
+        self.dc87 = self.bilinear(4096, scale_factor=0.0625)
         # Level 7->7
-        self.dc77 = self.decoder(256*2, 256)
+        self.dc77 = self.decoder(256*2, 256, kernel_size=(3,3,1), padding=1, n_convs=4)
         # Level 7->6
-        self.dc76 = self.decoder(256, 128*2, kernel_size=3, stride=1, padding=1, bias=False)
+        self.dc76 = self.bilinear(256, scale_factor=0.5)
         # Level 6->6
-        self.dc66 = self.decoder(128*2, 128)
+        self.dc66 = self.decoder(128*2, 128, kernel_size=(3,3,1), padding=1, n_convs=4)
         # Level 6->5
-        self.dc65 = self.decoder(128, 128*2, kernel_size=3, stride=1, padding=1, bias=False)
+        self.dc65 = self.bilinear(128, scale_factor=1)
         # Level 5->5
-        self.dc55 = self.decoder(128*2, 128)
+        self.dc55 = self.decoder(128*2, 128, kernel_size=(3,3,1), padding=1, n_convs=4)
         # Level 5->4
-        self.dc54 = self.decoder(128, 128*2, kernel_size=2, stride=2, bias=False)
+        self.dc54 = self.bilinear_up(128, scale_factor=0.5)
         # level 4->4
-        self.dc44 = self.decoder(128*2, 128)
+        self.dc44 = self.decoder(64*2, 64, kernel_size=(3,3,1), padding=1, n_convs=4)
         # Level 4->3
-        self.dc43 = self.decoder(128, 64*2, kernel_size=3, stride=1, padding=1, bias=False)
+        self.dc43 = self.bilinear(64, scale_factor=0.5)
         # level 3->3
-        self.dc33 = self.decoder(64*2, 64)
+        self.dc33 = self.decoder(32*2, 32, kernel_size=(3,3,1), padding=1, n_convs=4)
         # Level 3->2
-        self.dc32 = self.decoder(64, 32*2, kernel_size=3, stride=1, padding=1, bias=False)
+        self.dc32 = self.bilinear(32, scale_factor=1)
         # Level 2->2
-        self.dc22 = self.decoder(32*2, 32)
+        self.dc22 = self.decoder(32*2, 32, kernel_size=(3,3,1), padding=1, n_convs=4)
         # Level 2->1
-        self.dc21 = self.decoder(32, 32*2, kernel_size=2, stride=2, bias=False)
+        self.dc21 = self.bilinear(32, scale_factor=1)
         # Level 1->1
-        self.dc11 = self.decoder(32*2, 32)
-        # Into classes
-        self.dc10 = self.decoder(32, n_classes)
+        self.dc11 = self.decoder(32*2, 32, kernel_size=(3,3,1), padding=1, n_convs=4)
+
+        # Into classes - maybe this is the same as above?
+        self.dc10 = self.decoder(32, n_classes, kernel_size=(3,3,1), padding=1, n_convs=4)
 
     def forward(self, e1):
         """
-        # start at l1
-        e0 = self.ec0(x) # right
-        syn0 = self.ec1(e0) # right (l1)
-        e1 = self.pool0(syn0) # down (to l2)
-        e2 = self.ec2(e1) # right
-        syn1 = self.ec3(e2) # right
-        del e0, e1, e2
+        Define the forward pass of the network
+        See supp figure 14 here:
+        https://static-content.springer.com/esm/art%3A10.1038%2Fs41591-018-0107-6/MediaObjects/41591_2018_107_MOESM1_ESM.pdf
         """
         # l1
         syn1 = self.ec11(e1) # init right - l1
@@ -176,64 +134,100 @@ class UNet3D(nn.Module):
         e71 = self.down67(syn6) #down to 7
 
         # l7
-        e72 = self.ec771(e71) # right 1
-        syn7 = self.ec772(e72) # right 2
+        e72 = self.ec771(e71) # right 1 (green)
+        syn7 = self.ec772(e72) # right 2 (turq)
         del e71, e72
 
         # l8 - the very bottom most encoded
-        e_bottom_right = self.ec88(syn7) # can delete later
+        e_bottom_right = self.ec88(syn7)
 
         ## DECODE ##
+        # QUESTION - check this is a simple cat - says "copy and stack"
+        d71 = torch.cat((self.dc87(e_bottom_right), syn7)) # concat on level 7
+        d72 = self.dc77(d71) # move right on level 7 (decode)
+        del e_bottom_right, d71, syn7
 
-        """
-        ## DECODING ##
+        # TODO - finish
+        d61 = torch.cat((self.dc76(d72), syn6))
+        d62 = self.dc66(d61)
+        del d72, d61, syn6
 
-        d9 = torch.cat((self.dc9(e7), syn2)) # concat - adding level 3
-        del e7, syn2
+        d51 = torch.cat((self.dc65(d62), syn5))
+        d52 = self.dc55(d51)
+        del d62, d51, syn5
 
-        d8 = self.dc8(d9) # right (compress level 3)
-        d7 = self.dc7(d8) # right (normal level 3)
-        del d9, d8
+        d41 = torch.cat((self.dc54(d52), syn4))
+        d42 = self.dc44(d41)
+        del d41, d52, syn4
 
-        d6 = torch.cat((self.dc6(d7), syn1)) # concat - adding to level 2
-        del d7, syn1
+        d31 = torch.cat((self.dc43(d42), syn3))
+        d32 = self.dc33(d31)
+        del d31, d42, syn3
 
-        d5 = self.dc5(d6) # right (l2)
-        d4 = self.dc4(d5) # right (l2)
-        del d6, d5
+        d21 = torch.cat((self.dc32(d32), syn2))
+        d22 = self.dc22(d21)
+        del d21, d32, syn2
 
-        d3 = torch.cat((self.dc3(d4), syn0)) # concat - adding to level 1
-        del d4, syn0
+        d11 = torch.cat((self.dc21(d22), syn1))
+        d12 = self.dc11(d11)
+        del d11, d22, syn1
 
-        d2 = self.dc2(d3) # right
-        d1 = self.dc1(d2) # right
-        del d3, d2
-        """
-
-        d0 = self.dc0(d1) # final right - output
+        # QUESTION
+        # is this right or is there only 1 rightward step at top layer
+        d0 = self.dc10(d12)
         return d0
 
-    def encoder(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0, bias=True, batchnorm=False):
-        """An encoder function (downsample)."""
+    def encoder(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0, bias=True, batchnorm=True, n_convs=1):
+        """An encoder function, applies conv of kernel size."""
+        mods = []
+        for n in range(n_convs):
 
-        # TODO: Check batchnorm and if activation is ReLU?
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU())
-        else:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.ReLU())
+            mods.append(nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
+
+            # TODO: Check batchnorm?
+            if batchnorm:
+                mods.append(nn.BatchNorm2d(out_channels))
+
+            # TODO - check if activation is ReLU and attached every conv?
+            mods.append(F.ReLU())
+
+        layer = nn.Sequential(*mods)
 
         return layer
 
+    # QUESTION - figure out align_corners, adjust scale factor for n_apps
+    # e.g. scale factor squared?
+    def bilinear(self, in_channels, scale_factor, n_apps=2):
+        """Up/Downsample by bilinear interpolation."""
+        mods = []
+        for n in n_apps:
+            mods.append(F.interpolate(input_size=in_channels,
+                        scale_factor=scale_factor, mode='bilinear',
+                        align_corners=False))
+        return nn.Sequential(*mods)
 
-    def decoder(self, in_channels, out_channels, kernel_size, stride=1, padding=1, output_padding=0, bias=True):
+    def n_linear(self, in_channels, out_channels, n_layers=1):
+        """A series of n fully connected layers."""
+
+        n_layer_list = []
+
+        for n in n_layers:
+            n_layer_list.append(nn.Linear(in_channels, out_channels))
+
+        layer = nn.Sequential(*n_layer_list)
+
+        return layer
+
+    def decoder(self, in_channels, out_channels, kernel_size, stride=1, padding=1, output_padding=0, bias=True, n_convs=1):
         """An encoder function (upsample)."""
-        layer = nn.Sequential(
-            nn.ConvTranspose3d(in_channels, out_channels, kernel_size, stride=stride,
-                               padding=padding, output_padding=output_padding, bias=bias),
-            nn.ReLU())
+
+        mods = []
+
+        for n in n_convs:
+            mods.append(nn.ConvTranspose3d(in_channels, out_channels, kernel_size, stride=stride,
+                               padding=padding, output_padding=output_padding, bias=bias))
+            mods.append(F.ReLU())
+
+        layer = nn.Sequential(*mods)
+
         return layer
