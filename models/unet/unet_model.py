@@ -195,16 +195,14 @@ class UNet3D(nn.Module):
 
         return layer
 
-    # QUESTION - figure out align_corners, adjust scale factor for n_apps
-    # e.g. scale factor squared?
-    def bilinear(self, in_channels, scale_factor, n_apps=2):
+    # QUESTION - figure out align_corners
+    # paper says 2x bilinear - does this just mean scale factor 2?
+    def bilinear(self, in_channels, scale_factor):
         """Up/Downsample by bilinear interpolation."""
-        mods = []
-        for n in n_apps:
-            mods.append(F.interpolate(input_size=in_channels,
+
+        return F.interpolate(input_size=in_channels,
                         scale_factor=scale_factor, mode='bilinear',
                         align_corners=False))
-        return nn.Sequential(*mods)
 
     def n_linear(self, in_channels, out_channels, n_layers=1):
         """A series of n fully connected layers."""
