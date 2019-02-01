@@ -1,8 +1,6 @@
 # Classification Network Implementation
 
-PyTorch implementation of the network found in clinically applicable deep learning paper (De Fauw et al. (2018)). Image also taken from there.
-
-![Network to be implemented](https://raw.githubusercontent.com/j-bernardi/dnn-information/master/docs/supplementary/classify.png)
+PyTorch implementation of the network found in clinically applicable deep learning paper (De Fauw et al. (2018)).
 
 Ref: Nature Medicine, volume 24, pages1342–1350 (2018)
 

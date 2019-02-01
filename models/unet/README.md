@@ -1,6 +1,6 @@
 # U-Net Implementation
 
-PyTorch implementation of the network found in clinically applicable deep learning paper (De Fauw et al. (2018)). Image also taken from there.
+PyTorch implementation of the network found in clinically applicable deep learning paper (De Fauw et al. (2018)). Image taken from supplementary information.
 
 ![Network to be implemented](https://raw.githubusercontent.com/j-bernardi/dnn-information/master/docs/supplementary/u-net.png)
 

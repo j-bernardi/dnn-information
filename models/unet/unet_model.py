@@ -202,7 +202,7 @@ class UNet3D(nn.Module):
 
         return F.interpolate(input_size=in_channels,
                         scale_factor=scale_factor, mode='bilinear',
-                        align_corners=False))
+                        align_corners=False)
 
     def n_linear(self, in_channels, out_channels, n_layers=1):
         """A series of n fully connected layers."""
