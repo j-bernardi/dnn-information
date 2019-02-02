@@ -1,6 +1,12 @@
 import torch, torchvision
 import torch.optim as optim
+import pandas as pd
+import numpy as np
+
+from skimage import io, transform
 from unet_model import UNet3D
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, utils
 
 # for 160,000 iterations
 epochs = 160000
@@ -10,6 +16,8 @@ learn_rate_0 = 0.0001
 batch_size = 8
 # workers - on 8 graphics processing units (GPUs)
 workers = 2 # Cuda count gpus? not sure
+# Label smoothing - 0.1
+label_smoothing = 0.1
 
 
 class VoxelsDataset(Dataset):
@@ -71,12 +79,37 @@ def load_data(location, loader_object, batch_size, workers):
 
     return trainloader, testloader, classes
 
-if __name__ == "__main__":
+def calc_loss(pred, gold, smoothing=0):
+    """
+    Calc CEL and apply label smoothing.
+    TODO - verify
+    Came from:
+        https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/train.py
+    """
+    gold = gold.contiguous().view(-1)
 
-    # TODO
+    if smoothing > 0:
+        eps = smoothing
+        n_class = pred.size(1)
+
+        one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+        log_prb = F.log_softmax(pred, dim=1)
+
+        non_pad_mask = gold.ne(0)
+        loss = -(one_hot * log_prb).sum(dim=1)
+        loss = loss.masked_select(non_pad_mask).sum()  # average later
+    else:
+        loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')
+
+        return loss
+
+if __name__ == "__main__":
+    # We have neither used dropout nor weight decay
+
     # with dataset 1 in Supplementary Table 3
     location = "images"
-    csv_file = location + '/scans.csv'
+    csv_file = location + '/sample_scans.csv'
 
     print("Loading images")
     scan = pd.read_csv(csv_file)
@@ -86,26 +119,19 @@ if __name__ == "__main__":
     trainloader, testloader, classes = load_data(location, scan_dataset,
                                                  batch_size, workers)
 
-    # The input is therefore a 448 × 512 × 9 voxels image
+    # Data: 448x512x128 image
+    # The input for each slice is a 448 × 512 × 9 voxels image
+    # TODO - for each of the slices:
+    # load in the 4 slices either side to pass the 448x512x9 to the network
+    # no padding
     dataiter = iter(trainloader)
     images, labels = dataiter.next()
     unet = UNet3D()
 
-    # We used per-voxel cross entropy as the loss function, with 0.1 label-smoothing regularization
-    # TODO: What does it mean to be per-voxel?
-    # TODO: add label smoothing
-    # We have neither used dropout nor weight decay
-    """
-    ADD LABEL SMOOTHING:
-        For label_smoothing, you cat look at the implementation of NJUNMT-pytorch
-        In the class NMTCritierion
-        https://github.com/whr94621/NJUNMT-pytorch/blob/aff968c0da9273dc42eabbb8ac4e459f9195f6e4/src/modules/criterions.py#L131
-    """
-    criterion = nn.CrossEntropyLoss()
-
     # Learning rate and time to change
     idxs = epochs * np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95])
-    lrs = learn_rate_0 * n.array([1, 0.5, 0.25, 0.125, 0.015625, 0.00390625, 0.001953125])
+    lrs = learn_rate_0 * n.array([1, 0.5, 0.25, 0.125, 0.015625,
+                                  0.00390625, 0.001953125])
     next_idx = 1
 
     # Adam optimizer - https://arxiv.org/abs/1412.6980
@@ -132,7 +158,12 @@ if __name__ == "__main__":
 
             outputs = unet(inputs)
 
-            loss = criterion(outputs, labels)
+            # Per-voxel x-entropy, with 0.1 label-smoothing regularization
+            # TODO - verify calc_loss
+            # TODO: What does it mean to be per-voxel?
+            # Voxel is one of the 9 slices passed as input
+            # Some sort of "for z-layer in input (average(loss))?"
+            loss = calc_loss(outputs, labels, smoothing=label_smoothing)
 
             loss.backward()
             optimizer.step()
