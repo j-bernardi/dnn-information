@@ -24,3 +24,6 @@ Based on: https://github.com/shiba24/3d-unet
 Sets out the model structure as found here  (supplementary figure 14):
 
 https://static-content.springer.com/esm/art%3A10.1038%2Fs41591-018-0107-6/MediaObjects/41591_2018_107_MOESM1_ESM.pdf
+
+### train_segment.py
+Train the segmentation network.

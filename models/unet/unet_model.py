@@ -196,7 +196,6 @@ class UNet3D(nn.Module):
         return layer
 
     # QUESTION - figure out align_corners
-    # paper says 2x bilinear - does this just mean scale factor 2?
     def bilinear(self, in_channels, scale_factor):
         """Up/Downsample by bilinear interpolation."""
 

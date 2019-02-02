@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-## TODO: We also used a small amount (0.05) of label-smoothing regularization
 ## TODO - input dimensions? 15 channels in and 14 out?
-## and added some (1 × 10−5) weight decay.
+
 
 class CNet(nn.Module):
 
