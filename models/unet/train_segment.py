@@ -1,78 +1,105 @@
-import torch, torchvision
+import torch, torchvision, os, sys
 import torch.optim as optim
 import pandas as pd
 import numpy as np
 
-from skimage import io, transform
+from skimage import io, transform, morphology
+from scipy import ndimage as nd
 from unet_model import UNet3D
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
 # for 160,000 iterations
-epochs = 160000
+epochs = 50# for data: 160000
 # The initial learning rate was 0.0001
 learn_rate_0 = 0.0001
 # batch sizes - 8
-batch_size = 8
+batch_size = 1 #8
 # workers - on 8 graphics processing units (GPUs)
-workers = 2 # Cuda count gpus? not sure
+workers = 1 #2# Cuda count gpus? not sure
 # Label smoothing - 0.1
 label_smoothing = 0.1
 
+validation_split = 0.2
 
+# with dataset 1 in Supplementary Table 3
+index_prefix = "small_slice_sample_scans_"
+location = "data/tensors"
+
+# TODO - transforms - handle the dataset...
 class VoxelsDataset(Dataset):
-    """Retinal scan dataset. Takes in a csv file as a scan"""
+    """
+    Retinal scan dataset.
+    Just stores the file location and creates objects for each image in the dataset...
+    """
 
-    def __init__(self, csv_file, root_dir, transform=None):
+    def __init__(self, root_dir, index_prefix, transform=None):
         """
         Args:
             csv_file (string) path to csv file with annot
             root_dir (string) dir with images
             transform (callable, optional): apply trans to sample
+        NOTES:
+            # we augmented the data by applying
+            #   affine and
+            #   elastic transformations
+            # jointly over the inputs and ground-truth segmentations
+            # Intensity transformations over the inputs were also applied.
+
         """
-        self.scan = pd.read_csv(csv_file)
+        # TODO: self.labels = pd.get_dummies(self.scan_frame[-1]).as_matrix
         self.root_dir = root_dir
+        self.index_prefix = index_prefix
         self.transform = transform
 
     def __len__(self):
-        return len(self.scan)
+        return len([f for f in os.listdir(self.root_dir) if f.endswith(".pt") and f.startswith(self.index_prefix + "image")])
 
     def __getitem__(self, index):
+        """
+        Returns a single dataframe representing an image file
+        with a given index.
+        """
+        img_name = os.path.join(self.root_dir, self.index_prefix) + "image" + str(index) + ".pt"
+        class_name = os.path.join(self.root_dir, self.index_prefix) + "class" + str(index) + ".pt"
 
-        pixels = self.scan.iloc[index, 1:].as_matrix()
-        pixels = scan.astype('float').reshape(-1, 2) # check dimensions
-        sample ={'image':image}
+        img_tensor = [torch.load(img_name)]
+        class_tensor = [torch.load(class_name)]
+
+        img_tensor = np.concatenate([it[np.newaxis] for it in img_tensor])
+        class_tensor = np.concatenate([it[np.newaxis] for it in class_tensor])
+
+        sample = {'image': img_tensor, 'classes': class_tensor}
 
         if self.transform:
             sample = self.transform(sample)
+        print("Got item", index)
         return sample
 
 
-# TODO - transforms
-def load_data(location, loader_object, batch_size, workers):
+def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True):
     """
     Loads the data from location specified.
-    NOTES:
-        # we augmented the data by applying
-        #   affine and
-        #   elastic transformations
-        # jointly over the inputs and ground-truth segmentations
-        # Intensity transformations over the inputs were also applied.
     """
-    # TODO - finish
-    transform = transforms.Compose(
-        [transforms.ToTensor(),
-        ])
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        scan_dataset.transform
+    ])
 
-    trainset = loader_object(root=location, train=True, download=True,
-                             transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                              shuffle=True, num_workers=workers)
+    # Creating data indices for training and validation splits:
+    dataset_size = len(scan_dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_split * dataset_size))
+    if shuffle:
+        np.random.seed(42)
+        np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
 
-    testset = loader_object(root=location, train=False, download=True,
-                             transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                              shuffle=False, num_workers=workers)
+    train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
+    valid_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
+
+    trainloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=workers)
+    testloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=valid_sampler, num_workers=workers)
 
     classes = ('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9',
                    's10', 's11', 's12', 's13', 's14', 's15')
@@ -106,41 +133,41 @@ def calc_loss(pred, gold, smoothing=0):
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
-
-    # with dataset 1 in Supplementary Table 3
-    location = "images"
-    csv_file = location + '/sample_scans.csv'
-
+    ## LOAD DATA ##
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("Loading images")
-    scan = pd.read_csv(csv_file)
+    scan_dataset = VoxelsDataset(location, index_prefix)
+    trainloader, testloader, classes = load_data(scan_dataset, batch_size,
+                                                 workers, validation_split)
+    print("Loaded.")
 
-    scan_dataset = VoxelsDataset(csv_file=csv_file, root_dir=location)
-
-    trainloader, testloader, classes = load_data(location, scan_dataset,
-                                                 batch_size, workers)
-
-    # Data: 448x512x128 image
-    # The input for each slice is a 448 × 512 × 9 voxels image
-    # TODO - for each of the slices:
-    # load in the 4 slices either side to pass the 448x512x9 to the network
-    # no padding
-    dataiter = iter(trainloader)
-    images, labels = dataiter.next()
+    # LOAD MODEL #
     unet = UNet3D()
+    unet.float()
+    unet.to(device)
 
-    # Learning rate and time to change
+    # Learning rate and time to change #
     idxs = epochs * np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95])
-    lrs = learn_rate_0 * n.array([1, 0.5, 0.25, 0.125, 0.015625,
+    lrs = learn_rate_0 * np.array([1, 0.5, 0.25, 0.125, 0.015625,
                                   0.00390625, 0.001953125])
     next_idx = 1
 
-    # Adam optimizer - https://arxiv.org/abs/1412.6980
-    optimizer = optim.Adam(net.parameters(), lr=learn_rate_0)
+    # Adam optimizer - https://arxiv.org/abs/1412.6980 #
+    optimizer = optim.Adam(unet.parameters(), lr=learn_rate_0)
 
+    # Data: 448x512x128 image
+    # The input for each of the 128 slices is a 448 × 512 × 9 voxels image
+    #   TODO: load in the 4 slices either side to pass the 448x512x9 to the network
+    # no padding
+
+    ## TRAIN ##
+    print("Starting training.")
+    # epochs #
     for epoch in range(epochs):
-
+        #print("Epoch", epoch)
         running_loss = 0
 
+        # Iterate through data #
         for i, data in enumerate(trainloader, 0):
 
             if i == idxs[next_idx]:
@@ -153,11 +180,18 @@ if __name__ == "__main__":
                 else:
                     next_idx = 0
 
-            inputs, labels = data
+            # batch inputs and classes per pixel
+            inputs, labels = data['image'].float(), data['classes'].float()
+            inputs, labels = inputs.to(device), labels.to(device)
+            #print("inputs shape", inputs.shape, "labels shape", labels.shape)
+
+            # TODO - for each plane, pass the 4 either side
+            # e.g. 9 slices per slice to the network to train on - outputs 3d image still
+
             optimizer.zero_grad()
 
             outputs = unet(inputs)
-
+            sys.exit()
             # Per-voxel x-entropy, with 0.1 label-smoothing regularization
             # TODO - verify calc_loss
             # TODO: What does it mean to be per-voxel?
@@ -171,7 +205,7 @@ if __name__ == "__main__":
 
         # Track loss per epoch
         print('[Epoch %d complete] loss: %.3f' %
-              (epoch +1,running_loss / len(trainloader)))
+              (epoch +1, running_loss / len(trainloader)))
         running_loss = 0.0
     print("Training complete")
 
