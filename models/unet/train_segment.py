@@ -1,10 +1,6 @@
 import torch, torchvision, os, sys
 import torch.optim as optim
-import pandas as pd
 import numpy as np
-
-from skimage import io, transform, morphology
-from scipy import ndimage as nd
 from unet_model import UNet3D
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -22,8 +18,10 @@ label_smoothing = 0.1
 
 validation_split = 0.2
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 # with dataset 1 in Supplementary Table 3
-index_prefix = "single_slice_sample_scans_"
+index_prefix = "dummy_slice_sample_scans_"
 location = "data/tensors"
 
 # TODO - transforms - handle the dataset...
@@ -134,7 +132,6 @@ def calc_loss(pred, gold, smoothing=0):
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
     ## LOAD DATA ##
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("Loading images")
     scan_dataset = VoxelsDataset(location, index_prefix)
     trainloader, testloader, classes = load_data(scan_dataset, batch_size,
@@ -144,7 +141,8 @@ if __name__ == "__main__":
     # LOAD MODEL #
     unet = UNet3D()
     unet.float()
-    unet.to(device)
+    print("Moving model to", device)
+    unet = unet.to(device)
 
     # Learning rate and time to change #
     idxs = epochs * np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95])
