@@ -23,7 +23,7 @@ label_smoothing = 0.1
 validation_split = 0.2
 
 # with dataset 1 in Supplementary Table 3
-index_prefix = "small_slice_sample_scans_"
+index_prefix = "single_slice_sample_scans_"
 location = "data/tensors"
 
 # TODO - transforms - handle the dataset...

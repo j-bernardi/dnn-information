@@ -1,12 +1,12 @@
 import pickle, torch
 
-x = int(448/4)#28#*16#= 448
-y = int(512/4)#32#*16#= 512
-z = 9#8 #*16#= 128
+x = int(448)#28#*16#= 448
+y = int(512)#32#*16#= 512
+z = 1#8 #*16#= 128
 classes = 15
 to_generate = 5
 
-save_loc = "data/tensors/small_slice_sample_scans_"
+save_loc = "data/tensors/single_slice_sample_scans_"
 
 for n in range(to_generate):
 
