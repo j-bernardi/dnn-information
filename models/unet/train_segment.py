@@ -21,7 +21,7 @@ validation_split = 0.2
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # with dataset 1 in Supplementary Table 3
-index_prefix = "dummy_slice_sample_scans_"
+index_prefix = "dummy_half_slice_sample_scans_"
 location = "data/tensors"
 
 # TODO - transforms - handle the dataset...
@@ -127,7 +127,7 @@ def calc_loss(pred, gold, smoothing=0):
     else:
         loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')
 
-        return loss
+    return loss
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
@@ -189,7 +189,7 @@ if __name__ == "__main__":
             optimizer.zero_grad()
 
             outputs = unet(inputs)
-            sys.exit()
+
             # Per-voxel x-entropy, with 0.1 label-smoothing regularization
             # TODO - verify calc_loss
             # TODO: What does it mean to be per-voxel?
