@@ -1,12 +1,13 @@
 import torch, torchvision, os, sys
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 from unet_model import UNet3D
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
 # for 160,000 iterations
-epochs = 50# for data: 160000
+epochs = 10# for data: 160000
 # The initial learning rate was 0.0001
 learn_rate_0 = 0.0001
 # batch sizes - 8
@@ -21,8 +22,10 @@ validation_split = 0.2
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # with dataset 1 in Supplementary Table 3
-index_prefix = "dummy_half_slice_sample_scans_"
-location = "data/tensors"
+index_prefix = ""
+location = "data/input_tensors/dummy_half_slice_sample_scans/"
+
+save_location = "models/unet/saved_models/unet.pth"
 
 # TODO - transforms - handle the dataset...
 class VoxelsDataset(Dataset):
@@ -71,7 +74,7 @@ class VoxelsDataset(Dataset):
 
         if self.transform:
             sample = self.transform(sample)
-        print("Got item", index)
+        #print("Got item", index)
         return sample
 
 
@@ -99,25 +102,34 @@ def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True):
     trainloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=workers)
     testloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=valid_sampler, num_workers=workers)
 
-    classes = ('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9',
-                   's10', 's11', 's12', 's13', 's14', 's15')
+    classes = ('s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9',
+                   's10', 's11', 's12', 's13', 's14')
 
     return trainloader, testloader, classes
 
-def calc_loss(pred, gold, smoothing=0):
+def calc_loss(pred, gold, batch_size, smoothing=0):
     """
     Calc CEL and apply label smoothing.
     TODO - verify
     Came from:
         https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/train.py
     """
-    gold = gold.contiguous().view(-1)
+    #print("before", gold.shape)
+    # TODO - take [1] index (e.g. 2nd) of gold and make it a one-hot vector
+    #gold = gold.contiguous().view(-1)
+    #print("after", gold.shape)
 
     if smoothing > 0:
         eps = smoothing
         n_class = pred.size(1)
 
-        one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+        
+        #one_hot_labels = gold.view(-1, 1).type(torch.long) # OLD
+        one_hot_labels = gold.type(torch.long)
+        #print("one hot labels", one_hot_labels.shape)
+        one_hot = torch.zeros_like(pred).scatter(1, one_hot_labels, 1)
+        #print("one hot", one_hot.shape)
+
         one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
         log_prb = F.log_softmax(pred, dim=1)
 
@@ -170,7 +182,7 @@ if __name__ == "__main__":
 
             if i == idxs[next_idx]:
                 # update the learning rate
-                for g in optim.param_groups:
+                for g in optimizer.param_groups:
                     g['lr'] = lrs[next_idx]
                 # update the next one to look at
                 if next_idx + 1 < len(idxs):
@@ -179,7 +191,7 @@ if __name__ == "__main__":
                     next_idx = 0
 
             # batch inputs and classes per pixel
-            inputs, labels = data['image'].float(), data['classes'].float()
+            inputs, labels = data['image'].float(), data['classes']
             inputs, labels = inputs.to(device), labels.to(device)
             #print("inputs shape", inputs.shape, "labels shape", labels.shape)
 
@@ -195,7 +207,9 @@ if __name__ == "__main__":
             # TODO: What does it mean to be per-voxel?
             # Voxel is one of the 9 slices passed as input
             # Some sort of "for z-layer in input (average(loss))?"
-            loss = calc_loss(outputs, labels, smoothing=label_smoothing)
+            #print("Outputs", outputs.shape)
+            #print("Labels", labels.shape)
+            loss = calc_loss(outputs, labels, batch_size, smoothing=label_smoothing)
 
             loss.backward()
             optimizer.step()
@@ -206,36 +220,60 @@ if __name__ == "__main__":
               (epoch +1, running_loss / len(trainloader)))
         running_loss = 0.0
     print("Training complete")
-
-    print("Loading test data")
-    dataiter = iter(testloader)
-    images, labels = dataiter.next()
-
     print("Testing")
-    # TODO - check this works for looking over every pixel - this was written for a 2d image classifier
-    # the output is an estimated probability over the 15 classes, for each of the 448 × 512 × 1 output voxels
-    #   https://arxiv.org/abs/1512.00567
-    outputs = net(images)
-    class_corrct, class_total = list(0. for i in range(len(classes))), list(0. for i in range(len(classes)))
+    
+    class_correct, class_total = list(0. for i in range(len(classes))), list(0. for i in range(len(classes)))
     class_confs = list(0. for i in range(len(classes)))
     total, correct = 0, 0
+    
     with torch.no_grad():
         for data in testloader:
-            total += labels.size(0)
-            images, labes = data
-            outputs = net(images)
-            conf, predicted = torch.max(outputs.data, 1)
-            correct += (predicted == labels).sum().item()
-            c = (predicted == labels).squeeze()
+            images, labels = data['image'].float(), data['classes']
+            images, labels = images.to(device), labels.to(device)
+
+            # outputs is probabilities over the 15 classes
+            outputs = unet(images)
+            
+            # Scatter labels into one-hot format
+            labels = torch.zeros_like(outputs).scatter(1, labels, 1)
+            labels = labels.type(torch.long)
+
+            # predicted is the predicted class for each position - (bs,1,z,x,y)
+            _, predicted = torch.max(outputs.data, 1)
+            
+            # conf should be the confidence of each of the predicted classes per xyz           
+            # TODO for each x,y,z position, keep the max class, set all others to 0
+            
+            # c is the 1, 0 matrix of correct predictions (positive or negative) in each position for all in the batch
+            c = (predicted == labels)
+
+            # sum the number of correct predictions against the labels
+            correct += c.sum().item()
+            total += labels.numel()
+
+            # Iterate through batches
             for i in range(len(labels)):
-                label = labels[i]
-                class_correct[label] += c[i].item()
-                class_total[label] += 1
-                class_confs[label] += conf[i].item()
+
+                #label_matrix = labels[i] # -> (15, z, x, y)
+                
+                # sum the correct predictions for each label
+                for l in range(len(classes)):
+                    
+                    class_correct[l] += c[i][l].sum() # total correct for class l (e.g. is or isn't)
+                    class_total[l] += labels[i][l].numel() # total for class l, wrong and right
+                    
+                    #class_confs[l] += outputs[i][l] # e.g. sum only on the axes where 
+    
     print("Accuracy of network on", len(testloader), "test images: %d %%" % (100*correct/total))
-    conf.div_(torch,norm(conf,2))
+    
+    #class_confs.div_(torch,norm(class_confs,2))
+    
     for i in range(len(classes)):
-        print("accuracy of %5s : %2d %%" % (classes[i], 100*class_correct[i]/class_total[i]))
+        print("accuracy of %5s : %.3f %%" % (classes[i], 100*class_correct[i]/class_total[i]))
+        #print("\tconfidence %.3f" % class_confs[i]/class_total[i])
+
+    print("Saving model to", save_location)
+    torch.save(unet.state_dict(), save_location)
 
     # TODO does this show images?
-    imshow(torchvision.utils.make_grid(images))
+    # imshow(torchvision.utils.make_grid(images[0]))

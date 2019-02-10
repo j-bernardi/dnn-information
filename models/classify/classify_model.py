@@ -73,7 +73,10 @@ class CNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.bias, 0)
 
+    # TODO
     def forward(self, x):
+        
+        # 1. downsample (or upsample) to input size
         features = self.features(x)
         out = F.relu(features, inplace=True)
         out = F.adaptive_avg_pool3d(out, (1, 1)).view(features.size(0), -1)

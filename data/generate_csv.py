@@ -5,7 +5,7 @@ z = 9#8 #*16#= 128
 classes = 15
 
 to_generate = 5
-save_loc = "data/slice_sample_scans_"
+save_loc = "data/csvs/slice_sample_scans/"
 
 if __name__ == "__main__":
     for i in range(to_generate):
