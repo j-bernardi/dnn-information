@@ -125,6 +125,7 @@ def calc_loss(pred, gold, batch_size, smoothing=0):
 
         
         #one_hot_labels = gold.view(-1, 1).type(torch.long) # OLD
+        #print("gold", gold.shape)
         one_hot_labels = gold.type(torch.long)
         #print("one hot labels", one_hot_labels.shape)
         one_hot = torch.zeros_like(pred).scatter(1, one_hot_labels, 1)

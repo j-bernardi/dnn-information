@@ -1,14 +1,16 @@
+## IMPORT ##
 import pickle, torch, os, sys
 import numpy as np
-#print("Path to file", os.path.realpath(__file__))
 print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2]))
 sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2]))
 from models.unet import UNet3D
 
+
+## METAVARIABLES ##
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 classes = 15
 to_generate = 10
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 model_loc = "models/unet/saved_models/unet.pth"
 
@@ -16,48 +18,77 @@ input_root_dir = "data/input_tensors/"
 save_root_dir = "data/segmented_tensors/"
 this_input_dir = "dummy_half_slice_sample_scans/"
 
-input_loc = input_root_dir + this_input_dir
-save_loc = save_root_dir + this_input_dir
+def make_one_hot(labels, C=15):
+    '''
+    Converts an integer label torch.autograd.Variable to a one-hot Variable.
+    
+    Parameters
+    ----------
+    labels : torch.autograd.Variable of torch.cuda.LongTensor
+        N x 1 x D x H x W, where N is batch size. 
+        Each value is an integer representing correct classification.
+    C : integer. 
+        number of classes in labels.
+    
+    Returns
+    -------
+    target : torch.autograd.Variable of torch.cuda.FloatTensor
+        N x C x D x H x W, where C is class number. One-hot encoded.
+    '''
+    one_hot = torch.cuda.FloatTensor(labels.size(0), C, labels.size(2), labels.size(3), labels.size(4)).zero_()
+    target = one_hot.scatter_(1, labels.data, 1)
+    
+    #target = Variable(target)
+        
+    return target
 
-# make save location
-if not os.path.exists(save_loc):
-    os.makedirs(save_loc)
+def make_model(model_loc, device):
+    unet = UNet3D()
+    unet.load_state_dict(torch.load(model_loc))
+    # unet.eval()
+    print("Moving model to", device)
+    unet.to(device)
 
-# 0. load in the unet model
-unet = UNet3D()
-unet.load_state_dict(torch.load(model_loc))
-#unet.eval()
-print("Moving model to", device)
-unet.to(device)
+    return unet
 
-# 1. load in the input tensors from location
-print("Found", len([f for f in os.listdir(input_root_dir + this_input_dir) if f.endswith(".pt") and f.startswith("image")]), "files to segment.")
+if __name__ == "__main__":
+    # Make the locations
+    input_loc = input_root_dir + this_input_dir
+    save_loc = save_root_dir + this_input_dir
 
-with torch.no_grad():
-    for f in os.listdir(input_root_dir + this_input_dir):
-        if not f.endswith(".pt") or not f.startswith("image"):
-        	continue
+    # make save location
+    if not os.path.exists(save_loc):
+        os.makedirs(save_loc)
 
-        # load in
-        this_input = torch.load(input_root_dir + this_input_dir + f)
-        this_input = this_input.reshape(1, 1, this_input.size(0), this_input.size(1), this_input.size(2))
-        this_input = this_input.to(device)
+    unet = make_model(model_loc, device)
 
-        # evaluate TODO - make sure these are 1-hot encoded
-        this_output = unet(this_input)
+    # 1. load in the input tensors from location
+    print("Found", len([f for f in os.listdir(input_root_dir + this_input_dir) if f.endswith(".pt") and f.startswith("image")]), "files to segment.")
 
-        # get the indexes of all the maxima
-        _, this_output = torch.max(this_output.data, 1)
+    with torch.no_grad():
+        for f in os.listdir(input_root_dir + this_input_dir):
+            if not f.endswith(".pt") or not f.startswith("image"):
+                continue
+    
+            # load in
+            this_input = torch.load(input_root_dir + this_input_dir + f)
+            this_input = this_input.reshape(1, 1, this_input.size(0), this_input.size(1), this_input.size(2))
+            this_input = this_input.to(device)
 
-        # one hot these indices
-        one_hot = torch.zeros_like(this_output).scatter(1, this_output, 1)
-        print(one_hot.shape)
-        #print(this_output)
+            # evaluate TODO - make sure these are 1-hot encoded
+            this_output = unet(this_input)
 
-        # save
-        nm = f.split(os.sep)[-1]
-        torch.save(one_hot, save_loc + nm)
+            # get the indexes of all the maxima
+            _, max_matrix = torch.max(this_output.data, 1)
+            
+            # make class encoding one-hot
+            one_hot = make_one_hot(max_matrix.unsqueeze(0))
 
-with open(save_loc + "details.txt", "w+") as f:
-    f.write(str(len([f for f in os.listdir(input_root_dir + this_input_dir) if f.endswith(".pt") and f.startswith("image")])) + " files" 
-            + "\nclasses=" + str(classes))
+            # save the prediction
+            nm = f.split(os.sep)[-1]
+            torch.save(one_hot, (save_loc + nm).replace("image", "map"))
+
+    # Create a file with some details
+    with open(save_loc + "details.txt", "w+") as f:
+        f.write(str(len([f for f in os.listdir(input_root_dir + this_input_dir) if f.endswith(".pt") and f.startswith("image")])) + " files" 
+                + "\nclasses=" + str(classes))

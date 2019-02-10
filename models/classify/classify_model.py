@@ -11,6 +11,9 @@ class CNet(nn.Module):
 
         super(CNet, self).__init__()
 
+        # Make first up/down sampling
+
+
         num_features = in_channels
 
         # QUESTION - do we need an initial convolution?
@@ -73,14 +76,31 @@ class CNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.bias, 0)
 
-    # TODO
     def forward(self, x):
         
         # 1. downsample (or upsample) to input size
+        x = self.bilinear(x, x.size(1), x.size(1))
         features = self.features(x)
         out = F.relu(features, inplace=True)
         out = F.adaptive_avg_pool3d(out, (1, 1)).view(features.size(0), -1)
         return out
+
+    def bilinear(self, x, in_channels, out_channels, size=(43,300,350)):
+        """Up/Downsample by bilinear interpolation."""
+
+        # TODO - for each z-layer in x - instead of trilinear
+        # or bilinear per sheet?
+        y = F.interpolate(x, size=size,
+                             mode='trilinear', align_corners=False)
+        if in_channels != out_channels:
+            expand = nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, kernel_size=1, padding=0, bias=False),
+                #nn.BatchNorm3d(out_channels),
+                nn.ReLU()
+            )
+            expand = expand.to(self.device)
+            y = expand(y)
+        return y
 
 # TODO - fix the input sizes
 class _DenseBlock(nn.Sequential):

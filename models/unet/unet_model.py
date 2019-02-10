@@ -22,7 +22,7 @@ import torch.nn.functional as F
 class UNet3D(nn.Module):
     """The network."""
 
-    def __init__(self, in_channel=1, n_classes=15):
+    def __init__(self, in_channel=1, n_classes=15, device="find"):
         """
         Archtecture modelled from (refd in DeepMind Paper):
             https://arxiv.org/pdf/1606.06650.pdf
@@ -36,7 +36,10 @@ class UNet3D(nn.Module):
 
         self.in_channel = in_channel
         self.n_classes = n_classes
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if device == "find":
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        else: 
+            self.device = torch.device(device)
 
         super(UNet3D, self).__init__()
 

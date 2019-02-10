@@ -14,12 +14,12 @@ save_loc = save_root_dir + this_input_dir
 
 
 # 1. load in the input tensors from location
-print("Found", len([f for f in os.listdir(save_loc) if f.endswith(".pt") and f.startswith("image")]), "files to segment.")
+print("Found", len([f for f in os.listdir(save_loc) if f.endswith(".pt") and f.startswith("map")]), "files to segment.")
 
 with torch.no_grad():
 	for f in os.listdir(save_loc):
 		
-		if not f.endswith(".pt") or not f.startswith("image"):
+		if not f.endswith(".pt") or not f.startswith("map"):
 			continue
 
 		this_input_nm = save_loc + f
@@ -32,8 +32,9 @@ with torch.no_grad():
 		
 		classification = torch.cat((ref, dis))
 		
-		nm = this_input_nm.split(os.sep)[-1].replace("image", "class")
+		nm = this_input_nm.split(os.sep)[-1].replace("map", "class")
 
 		# save
 		torch.save(classification, nm)
 		#print(classification)
+	print("Done.")

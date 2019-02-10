@@ -1,23 +1,9 @@
 """" map a segmentation map to the four referral decisions and the ten additional diagnoses (see Supplementary Fig. 16)."""
-
-# We also used a small amount (0.05) of label-smoothing regularization
-# and added some (1 × 10−5) weight decay.
-# takes as input a 300 × 350 × 43 subsampling of the original 448 × 512 × 128 segmentation map
-
-# The inputs are one-hot encoded
-# and augmented by random three-dimensional affine and elastic transformations [14]
-# The loss was the sum of the softmax cross entropy loss for the first four components (multi-class referral decision)
-# the sigmoid cross entropy losses for the remaining ten components (additional diagnoses labels)
-# Adam optimiser[40]
-# for 160,000 iterations of batch size 8
-# spread across 8 GPUs with 1 sample per GPU with dataset 3 in Supplementary Table 3.
-
-
 import torch, torchvision, os, sys
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-from unet_model import UNet3D
+from classify_model import CNet
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
@@ -28,9 +14,14 @@ learn_rate_0 = 0.02
 # batch sizes - 8
 batch_size = 1 #8
 # workers - on 8 graphics processing units (GPUs)
+# spread across 8 GPUs with 1 sample per GPU with dataset 3 in Supplementary Table 3.
 workers = 1 #2# Cuda count gpus? not sure
-# Label smoothing - 0.1
-label_smoothing = 0.1
+# Label smoothing - 0.05
+label_smoothing = 0.05
+
+# and added some (1 × 10−5) weight decay.
+# TODO ^^
+weight_decay = 0.00001
 
 validation_split = 0.2
 
@@ -56,11 +47,7 @@ class MapDataset(Dataset):
             root_dir (string) dir with images
             transform (callable, optional): apply trans to sample
         NOTES:
-            # we augmented the data by applying
-            #   affine and
-            #   elastic transformations
-            # jointly over the inputs and ground-truth segmentations
-            # Intensity transformations over the inputs were also applied.
+            # and augmented by random three-dimensional affine and elastic transformations [14]
 
         """
         # TODO: self.labels = pd.get_dummies(self.scan_frame[-1]).as_matrix
@@ -69,14 +56,14 @@ class MapDataset(Dataset):
         self.transform = transform
 
     def __len__(self):
-        return len([f for f in os.listdir(self.root_dir) if f.endswith(".pt") and f.startswith(self.index_prefix + "image")])
+        return len([f for f in os.listdir(self.root_dir) if f.endswith(".pt") and f.startswith(self.index_prefix + "map")])
 
     def __getitem__(self, index):
         """
         Returns a single dataframe representing an image file
         with a given index.
         """
-        img_name = os.path.join(self.root_dir, self.index_prefix) + "image" + str(index) + ".pt"
+        img_name = os.path.join(self.root_dir, self.index_prefix) + "map" + str(index) + ".pt"
         class_name = os.path.join(self.root_dir, self.index_prefix) + "class" + str(index) + ".pt"
 
         img_tensor = [torch.load(img_name)]
@@ -93,17 +80,17 @@ class MapDataset(Dataset):
         return sample
 
 
-def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True):
+def load_data(map_dataset, batch_size, workers, val_split, shuffle=True):
     """
     Loads the data from location specified.
     """
     transform = transforms.Compose([
         transforms.ToTensor(),
-        scan_dataset.transform
+        map_dataset.transform
     ])
 
     # Creating data indices for training and validation splits:
-    dataset_size = len(scan_dataset)
+    dataset_size = len(map_dataset)
     indices = list(range(dataset_size))
     split = int(np.floor(validation_split * dataset_size))
     if shuffle:
@@ -114,15 +101,15 @@ def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True):
     train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
     valid_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
 
-    trainloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=workers)
-    testloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=valid_sampler, num_workers=workers)
+    trainloader = torch.utils.data.DataLoader(map_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=workers)
+    testloader = torch.utils.data.DataLoader(map_dataset, batch_size=batch_size, sampler=valid_sampler, num_workers=workers)
 
-    classes = ('s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9',
-                   's10', 's11', 's12', 's13', 's14')
+    classes = ('r0', 'r1', 'r2', 'r3', 'd0', 'd1', 'd2', 'd3', 'd4',
+                   'd5', 'd6', 'd7', 'd8', 'd9')
 
     return trainloader, testloader, classes
 
-def calc_loss(pred, gold, batch_size, smoothing=0):
+def calc_loss_old(pred, gold, batch_size, smoothing=0):
     """
     Calc CEL and apply label smoothing.
     TODO - verify
@@ -156,20 +143,23 @@ def calc_loss(pred, gold, batch_size, smoothing=0):
 
     return loss
 
+def calc_loss(pred, gold, batch_size, smoothing=0):
+	pass
+
 if __name__ == "__main__":
-    # We have neither used dropout nor weight decay
+    
     ## LOAD DATA ##
     print("Loading images")
     map_dataset = MapDataset(location, index_prefix)
-    trainloader, testloader, classes = load_data(scan_dataset, batch_size,
+    trainloader, testloader, classes = load_data(map_dataset, batch_size,
                                                  workers, validation_split)
     print("Loaded.")
 
     # LOAD MODEL #
-    unet = UNet3D()
-    unet.float()
+    net = CNet()
+    net.float()
     print("Moving model to", device)
-    unet = unet.to(device)
+    net = net.to(device)
 
     # Learning rate and time to change #
     idxs = epochs * np.array([0, 0.2, 0.5, 0.7, 0.9, 0.95])
@@ -178,15 +168,13 @@ if __name__ == "__main__":
     next_idx = 1
 
     # Adam optimizer - https://arxiv.org/abs/1412.6980 #
-    optimizer = optim.Adam(unet.parameters(), lr=learn_rate_0)
+    optimizer = optim.Adam(net.parameters(), lr=learn_rate_0)
 
-    # Data: 448x512x128 image
-    # The input for each of the 128 slices is a 448 × 512 × 9 voxels image
-    #   TODO: load in the 4 slices either side to pass the 448x512x9 to the network
-    # no padding
-
+    # Data: 300x350x43 subsampling
+    
     ## TRAIN ##
     print("Starting training.")
+    
     # epochs #
     for epoch in range(epochs):
         #print("Epoch", epoch)
@@ -210,20 +198,12 @@ if __name__ == "__main__":
             inputs, labels = inputs.to(device), labels.to(device)
             #print("inputs shape", inputs.shape, "labels shape", labels.shape)
 
-            # TODO - for each plane, pass the 4 either side
-            # e.g. 9 slices per slice to the network to train on - outputs 3d image still
-
             optimizer.zero_grad()
 
-            outputs = unet(inputs)
+            outputs = net(inputs)
 
-            # Per-voxel x-entropy, with 0.1 label-smoothing regularization
-            # TODO - verify calc_loss
-            # TODO: What does it mean to be per-voxel?
-            # Voxel is one of the 9 slices passed as input
-            # Some sort of "for z-layer in input (average(loss))?"
-            #print("Outputs", outputs.shape)
-            #print("Labels", labels.shape)
+            # The loss was the sum of the softmax cross entropy loss for the first four components (multi-class referral decision)
+			# the sigmoid cross entropy losses for the remaining ten components (additional diagnoses labels)
             loss = calc_loss(outputs, labels, batch_size, smoothing=label_smoothing)
 
             loss.backward()
@@ -235,8 +215,9 @@ if __name__ == "__main__":
               (epoch +1, running_loss / len(trainloader)))
         running_loss = 0.0
     print("Training complete")
-    print("Testing")
     
+    ## TEST ##
+    print("Testing")
     class_correct, class_total = list(0. for i in range(len(classes))), list(0. for i in range(len(classes)))
     class_confs = list(0. for i in range(len(classes)))
     total, correct = 0, 0
