@@ -86,7 +86,8 @@ if __name__ == "__main__":
 
             # save the prediction
             nm = f.split(os.sep)[-1]
-            torch.save(one_hot, (save_loc + nm).replace("image", "map"))
+            # TEMP: Added [0] here
+            torch.save(one_hot[0], (save_loc + nm).replace("image", "map"))
 
     # Create a file with some details
     with open(save_loc + "details.txt", "w+") as f:

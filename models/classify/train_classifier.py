@@ -66,17 +66,25 @@ class MapDataset(Dataset):
         img_name = os.path.join(self.root_dir, self.index_prefix) + "map" + str(index) + ".pt"
         class_name = os.path.join(self.root_dir, self.index_prefix) + "class" + str(index) + ".pt"
 
-        img_tensor = [torch.load(img_name)]
-        class_tensor = [torch.load(class_name)]
+        #print("getting")
+        img_tensor = torch.load(img_name).cpu()
+        class_tensor = [torch.load(class_name).cpu()]
 
-        img_tensor = np.concatenate([it[np.newaxis] for it in img_tensor])
+        #img_tensor = np.concatenate([it[np.newaxis] for it in img_tensor])
         class_tensor = np.concatenate([it[np.newaxis] for it in class_tensor])
+
+        #print("Got item", index)
+        #print(img_tensor.shape)
+        #print(class_tensor.shape)
 
         sample = {'image': img_tensor, 'classes': class_tensor}
 
         if self.transform:
             sample = self.transform(sample)
         #print("Got item", index)
+        #print("returning index", index)
+        #print(img_tensor.shape)
+        #print("Classes", class_tensor)
         return sample
 
 
@@ -200,6 +208,7 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
 
+            print("input shape", inputs.shape)
             outputs = net(inputs)
 
             # The loss was the sum of the softmax cross entropy loss for the first four components (multi-class referral decision)

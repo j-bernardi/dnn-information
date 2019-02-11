@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from collections import OrderedDict
 
 ## TODO - input dimensions? 15 channels in and 14 out?
 
@@ -13,9 +14,8 @@ class CNet(nn.Module):
 
         # Make first up/down sampling
 
-
         num_features = in_channels
-
+        self.features = nn.Sequential(OrderedDict([]))
         # QUESTION - do we need an initial convolution?
 
         # BLOCK 1 (l1-2)
@@ -62,7 +62,7 @@ class CNet(nn.Module):
         self.features.add_module('final_norm', nn.BatchNorm3d(num_features))
         self.features.add_module('relu', nn.ReLU(inplace=True))
         self.features.add_module('final_conv', nn.Conv3d(
-            num_features, num_classes, kernel_size=1)
+            num_features, n_classes, kernel_size=1)
         )
 
         # QUESTION: What does this do?
@@ -114,11 +114,11 @@ class _DenseBlock(nn.Sequential):
 
     def __init__(self, in_channels, bn_size, growth_rate, drop_rate, num_xy, num_z, x_before_z=2):
         # number of z convs applied
-
+        super(_DenseBlock, self).__init__()
         if num_z == 0:
             # just do x_before_z xs
             for i in range(x_before_z):
-                layer = self._DenseLayer(in_channels + i * growth_rate,
+                layer = _DenseLayer(in_channels + i * growth_rate,
                                           growth_rate, bn_size, drop_rate, ks=(3,3,1))
                 self.add_module('denselayer%d' % (i + 1), layer)
 
@@ -126,14 +126,14 @@ class _DenseBlock(nn.Sequential):
             for nz in range(num_z):
                 # Add the xy layers
                 for i in range(x_before_z):
-                    layer = self._DenseLayer(in_channels + i * (nz+1) * growth_rate,
+                    layer = _DenseLayer(in_channels + i * (nz+1) * growth_rate,
                         growth_rate, bn_size, drop_rate, ks=(3,3,1))
-                    self.add_module('denselayer%d' % (n_z + 1)*(i + 1), layer)
+                    self.add_module('denselayer%d' % (nz + 1)*(i + 1), layer)
 
                 # Add the z layer
-                layer = self._DenseLayer(in_channels + (i+1) * (nz+1) * growth_rate,
+                layer = _DenseLayer(in_channels + (i+1) * (nz+1) * growth_rate,
                                       growth_rate, bn_size, drop_rate, ks=(1,1,3))
-                self.add_module('denselayer%d' % ((n_z + 1) * i + 1 + n_z + 1), layer)
+                self.add_module('denselayer%d' % ((nz + 1) * i + 1 + nz + 1), layer)
 
 class _DenseLayer(nn.Sequential):
     """

@@ -72,9 +72,12 @@ class VoxelsDataset(Dataset):
 
         sample = {'image': img_tensor, 'classes': class_tensor}
 
+        print("Got item", index)
+        print(img_tensor.shape)
+        print(class_tensor.shape)
+        
         if self.transform:
             sample = self.transform(sample)
-        #print("Got item", index)
         return sample
 
 
