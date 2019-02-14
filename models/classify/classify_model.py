@@ -1,171 +1,283 @@
-import torch
+import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
-## TODO - input dimensions? 15 channels in and 14 out?
-
+## TODO - growth rate stuff and bn_size - don't know anything about this
 
 class CNet(nn.Module):
 
-    def __init__(self, growth_rate=32, in_channels=15, bn_size=4, drop_rate=0, n_classes=14):
+    def __init__(self, growth_rate=2, in_channels=15, bn_size=4, drop_rate=0, n_classes=14, device="find"):
 
         super(CNet, self).__init__()
 
-        # Make first up/down sampling
+        self.xy_kernel, self.z_kernel = (1,3,3), (3,1,1)
+        self.xy_padding, self.z_padding = (0,1,1), (1,0,0)
 
-        num_features = in_channels
-        self.features = nn.Sequential(OrderedDict([]))
-        # QUESTION - do we need an initial convolution?
+        # The number of channels appended by a layer
+        self.growth_rate = growth_rate
+        self.in_channels = in_channels
+        
+        # Bottleneck size - e.g. bottlneck layer has growth-rate * bottleneck
+        self.bn_size = bn_size
 
-        # BLOCK 1 (l1-2)
-        block1 = _DenseBlock(num_features, bn_size, growth_rate, drop_rate, num_xy=2, num_z=0)
-        num_features = num_features + 2 * growth_rate
-        trans1 = _Transition(num_features, num_features//2, conv=False)
-        num_features = num_features // 2
-        self.features.add_module('denseblock1', block1)
-        self.features.add_module('transition1', trans1)
+        self.in_channel = in_channels
+        self.n_classes = n_classes
+        
+        if device == "find":
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        else: 
+            self.device = torch.device(device)
 
-        # BLOCK 2 (l2-3) - 4x xy, 2x z, then transition(conv=True)
-        block2 = _DenseBlock(num_features, bn_size, growth_rate, drop_rate, num_xy=4, num_z=2)
-        num_features = num_features + 4 * 2 * growth_rate
-        trans2 = _Transition(num_features, num_features//2)
-        num_features = num_features // 2
-        self.features.add_module('denseblock2', block2)
-        self.features.add_module('transition2', trans2)
+        # 1. downsample (or upsample) to input size
+        # TEMP size - actually 
+        sz = (43, 300, 350)
+        sz_small = (23, 60, 70)
+        self.first = self.bilinear(in_channels, in_channels, size=sz)
 
-        # BLOCK 3 (l3-4) - 4x xy, 2x z, then transition(conv=True)
-        block3 = _DenseBlock(num_features, bn_size, growth_rate, drop_rate, num_xy=4, num_z=2)
-        num_features = num_features + 4 * 2 * growth_rate
-        trans3 = _Transition(num_features, num_features//2)
-        num_features = num_features // 2
-        self.features.add_module('denseblock3', block3)
-        self.features.add_module('transition3', trans3)
+        # TODO - sizes
+        self.a11 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a12 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
 
-        # BLOCK 4 (l4-5) - 4x xy, 2x z, then transition(conv=True)
-        block4 = _DenseBlock(num_features, bn_size, growth_rate, drop_rate, num_xy=4, num_z=2)
-        num_features = num_features + 4 * 2 * growth_rate
-        trans4 = _Transition(num_features, num_features//2)
-        num_features = num_features // 2
-        self.features.add_module('denseblock4', block4)
-        self.features.add_module('transition4', trans4)
+        # TODO - channels and sizes
+        self.down12 = self.downsample(in_channels, in_channels, conv=False)
 
-        # BLOCK 5 (l5-6) - 6x xy, 3x z then final_transition(conv=True(before), average pool)
-        block5 = _DenseBlock(num_features, bn_size, growth_rate, drop_rate, num_xy=6, num_z=3)
-        num_features = num_features + 6 * 3 * growth_rate
-        self.features.add_module('denseblock5', block5)
+        self.a21 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a22 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a23 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a24 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a25 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a26 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
 
-        # GROWTH RATE: lth layer has k_0 + k * (l-1) for each function Hlproducing k feature maps
-        # k is the growth rate
+        # TODO - check right number of out channels?? Pass size to right size
+        self.down23 = self.downsample(in_channels, in_channels // 4, conv=True)
+        in_channels = in_channels // 4
 
-        # Final convolution
-        self.features.add_module('final_norm', nn.BatchNorm3d(num_features))
-        self.features.add_module('relu', nn.ReLU(inplace=True))
-        self.features.add_module('final_conv', nn.Conv3d(
-            num_features, n_classes, kernel_size=1)
-        )
+        self.a31 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a32 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a33 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a34 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a35 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a36 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
 
-        # QUESTION: What does this do?
-        # 'Official init from torch repo'
-        for m in self.modules():
-            if isinstance(m, nn.Conv3d):
-                nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.BatchNorm3d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.constant_(m.bias, 0)
+        # Check out channels
+        self.down34 = self.downsample(in_channels, in_channels // 2, conv=True)
+        in_channels = in_channels // 2
+
+        self.a41 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a42 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a43 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a44 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a45 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a46 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+
+        # Check out channels
+        self.down45 = self.downsample(in_channels, int(math.floor(in_channels / 1.5)), conv=True)
+        in_channels = int(math.floor(in_channels / 1.5))
+
+        self.a51 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a52 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a53 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a54 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a55 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a56 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a57 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a58 = self.xy_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+        self.a59 = self.z_conv(in_channels, bn_size, growth_rate)
+        in_channels += growth_rate
+
+        self.last_step = self.conv_once(in_channels, n_classes)
 
     def forward(self, x):
-        
-        # 1. downsample (or upsample) to input size
-        x = self.bilinear(x, x.size(1), x.size(1))
-        features = self.features(x)
-        out = F.relu(features, inplace=True)
-        out = F.adaptive_avg_pool3d(out, (1, 1)).view(features.size(0), -1)
+
+        y = self.first(x)
+
+        # 1 2 x - y convs at initial size
+        y = torch.cat((y, self.a11(y)), 1)
+        y = torch.cat((y, self.a12(y)), 1)
+
+        # Max pooling to 150x175x43
+        y = self.down12(y)
+
+        # 2 x-y convs - out channels is bn size then concat
+        y = torch.cat((y, self.a21(y)), 1)
+        y = torch.cat((y, self.a22(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a23(y)), 1)
+        # 2 x-y convs - out channels is bn size then concat
+        y = torch.cat((y, self.a24(y)), 1)
+        y = torch.cat((y, self.a25(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a26(y)), 1)
+
+        # max pooling to 75x87x21 w conv
+        y = self.down23(y)
+
+        # 2xy convs
+        y = torch.cat((y, self.a31(y)), 1)
+        y = torch.cat((y, self.a32(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a33(y)), 1)
+        # 2xy convs
+        y = torch.cat((y, self.a34(y)), 1)
+        y = torch.cat((y, self.a35(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a36(y)), 1)
+
+        # max pooling to 37x43x10 w conv
+        y = self.down34(y)
+
+        # 2xy convs
+        y = torch.cat((y, self.a41(y)), 1)
+        y = torch.cat((y, self.a42(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a43(y)), 1)
+        # 2xy convs
+        y = torch.cat((y, self.a44(y)), 1)
+        y = torch.cat((y, self.a45(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a46(y)), 1)
+
+        # max pooling to 18x21x5
+        y = self.down45(y)
+
+        # 2xy convs
+        y = torch.cat((y, self.a51(y)), 1)
+        y = torch.cat((y, self.a52(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a53(y)), 1)
+        # 2xy convs
+        y = torch.cat((y, self.a54(y)), 1)
+        y = torch.cat((y, self.a55(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a56(y)), 1)
+        # 2xy convs
+        y = torch.cat((y, self.a57(y)), 1)
+        y = torch.cat((y, self.a58(y)), 1)
+        # 1 z conv
+        y = torch.cat((y, self.a59(y)), 1)
+
+        # TODO - check size out and check gradient being passed
+        y = self.last_step(y)
+
+        out = F.relu(y, inplace=True)
+        out = F.adaptive_avg_pool3d(out, (1, 1, 1)).view(out.size(0), -1)
+
+        print("out", out.size())
+
         return out
 
-    def bilinear(self, x, in_channels, out_channels, size=(43,300,350)):
+    def bilinear(self, in_channels, out_channels, size=(43,300,350)):
         """Up/Downsample by bilinear interpolation."""
 
-        # TODO - for each z-layer in x - instead of trilinear
-        # or bilinear per sheet?
-        y = F.interpolate(x, size=size,
-                             mode='trilinear', align_corners=False)
+        mods = []
+
+        mods.append(Interpolate(size=size, mode='trilinear'))
+
         if in_channels != out_channels:
-            expand = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size=1, padding=0, bias=False),
-                #nn.BatchNorm3d(out_channels),
-                nn.ReLU()
-            )
-            expand = expand.to(self.device)
-            y = expand(y)
-        return y
+            mods.append(nn.BatchNorm3d(in_channels))
+            mods.append(nn.Conv3d(in_channels, out_channels, kernel_size=1, padding=0, bias=False))
+            mods.append(nn.ReLU())
 
-# TODO - fix the input sizes
-class _DenseBlock(nn.Sequential):
-    """
-    Applies the xy and z convolutions in a block. Details:
-        https://arxiv.org/pdf/1608.06993.pdf
-        https://github.com/liuzhuang13/DenseNet
-        https://pytorch.org/docs/master/_modules/torchvision/models/densenet.html
-    Return the convolved vector and the output size (channels)
-    """
+        return nn.Sequential(*mods)
 
-    def __init__(self, in_channels, bn_size, growth_rate, drop_rate, num_xy, num_z, x_before_z=2):
-        # number of z convs applied
-        super(_DenseBlock, self).__init__()
-        if num_z == 0:
-            # just do x_before_z xs
-            for i in range(x_before_z):
-                layer = _DenseLayer(in_channels + i * growth_rate,
-                                          growth_rate, bn_size, drop_rate, ks=(3,3,1))
-                self.add_module('denselayer%d' % (i + 1), layer)
+    def xy_conv(self, in_channels, bn_size, growth_rate):
+        
+        mods = []
+        ## Bottleneck layer - improve computational efficiency
+        mods.append(nn.BatchNorm3d(in_channels))
+        mods.append(nn.ReLU(inplace=True))
+        mods.append(nn.Conv3d(in_channels, bn_size *
+                        growth_rate, kernel_size=1, stride=1, bias=False))
 
-        else:
-            for nz in range(num_z):
-                # Add the xy layers
-                for i in range(x_before_z):
-                    layer = _DenseLayer(in_channels + i * (nz+1) * growth_rate,
-                        growth_rate, bn_size, drop_rate, ks=(3,3,1))
-                    self.add_module('denselayer%d' % (nz + 1)*(i + 1), layer)
+        mods.append(nn.BatchNorm3d(bn_size*growth_rate))
+        mods.append(nn.ReLU(inplace=True))
+        mods.append(nn.Conv3d(bn_size*growth_rate, growth_rate,
+                        kernel_size=(1,3,3), stride=1, padding=(0,1,1), bias=False))        
 
-                # Add the z layer
-                layer = _DenseLayer(in_channels + (i+1) * (nz+1) * growth_rate,
-                                      growth_rate, bn_size, drop_rate, ks=(1,1,3))
-                self.add_module('denselayer%d' % ((nz + 1) * i + 1 + nz + 1), layer)
+        return nn.Sequential(*mods)
 
-class _DenseLayer(nn.Sequential):
-    """
-    Add a specific layer.
-        https://arxiv.org/pdf/1608.06993.pdf
-        https://github.com/liuzhuang13/DenseNet
-        https://pytorch.org/docs/master/_modules/torchvision/models/densenet.html
-    Return the convolved vector and the output size (channels)
-    """
-    def __init__(self, in_channels, growth_rate, bn_size, drop_rate=0, ks=(3,3,1)):
-        super(_DenseLayer, self).__init__()
-        self.add_module('norm', nn.BatchNorm3d(in_channels)),
-        self.add_module('relu', nn.ReLU(inplace=True)),
-        self.add_module('conv', nn.Conv3d(in_channels,
-            bn_size*growth_rate, kernel_size=ks, stride=1, bias=False)
-        )
-        self.drop_rate = drop_rate
+    def z_conv(self, in_channels, bn_size, growth_rate):
+        
+        mods = []
+        ## QUESTION - this block necessary?
+        mods.append(nn.BatchNorm3d(in_channels))
+        mods.append(nn.ReLU(inplace=True))
+        mods.append(nn.Conv3d(in_channels, bn_size *
+                        growth_rate, kernel_size=1, stride=1, bias=False))
 
-    def forward(self, x):
-        new_features = super(_DenseLayer, self).forward(x)
-        if self.drop_rate > 0:
-            new_features = F.dropout(new_features, p=self.drop_rate,
-                                     training=self.training)
-        return torch.cat([x, new_features], 1)
+        ## Bottleneck layer - improve computational efficiency
+        mods.append(nn.BatchNorm3d(bn_size*growth_rate))
+        mods.append(nn.ReLU(inplace=True))
+        mods.append(nn.Conv3d(bn_size*growth_rate, growth_rate,
+                        kernel_size=(3,1,1), stride=1, padding=(1,0,0), bias=False))        
+        
+        return nn.Sequential(*mods)
 
-class _Transition(nn.Sequential):
-    def __init__(self, num_input_features, num_output_features, conv=True):
-        super(_Transition, self).__init__()
-        if conv:
-            self.add_module('norm', nn.BatchNorm3d(num_input_features))
-            self.add_module('relu', nn.ReLU(inplace=True))
-            self.add_module('conv', nn.Conv3d(num_input_features, num_output_features,
-                                              kernel_size=1, stride=1, bias=False))
+    def downsample(self, in_channels, out_channels, conv=True):
+
+        mods = []
+
+        """
+        # In paper but not in DeepMind?
+        # conv layer
+        mods.append(nn.BatchNorm3d(in_channels))
+        mods.append(nn.Conv3d(in_channels, in_channels, kernel_size=1,padding=0,bias=False))
+        """
+
         # max pool - halve the number of modules
-        self.add_module('pool', nn.MaxPool3d(kernel_size=2, stride=2))
+        mods.append(nn.MaxPool3d(kernel_size=2, stride=2))
+        if conv:
+            mods += self.conv_once(in_channels, out_channels)
+
+        return nn.Sequential(*mods)
+
+    def conv_once(self, in_channels, out_channels):
+
+        mods = []
+
+        mods.append(nn.BatchNorm3d(in_channels))
+        mods.append(nn.ReLU(inplace=True))
+        mods.append(nn.Conv3d(in_channels, out_channels,
+                    kernel_size=1, stride=1, bias=False))
+
+        return nn.Sequential(*mods)
+
+class Interpolate(nn.Module):
+    def __init__(self, size, mode):
+        super(Interpolate, self).__init__()
+        self.interp = nn.functional.interpolate
+        self.size = size
+        self.mode = 'trilinear'
+        
+    def forward(self, x):
+        x = self.interp(x, size=self.size, mode=self.mode, align_corners=False)
+        return x

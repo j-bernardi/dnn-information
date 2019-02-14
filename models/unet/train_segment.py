@@ -26,7 +26,7 @@ index_prefix = ""
 location = "data/input_tensors/dummy_half_slice_sample_scans/"
 
 save_location = "models/unet/saved_models/unet.pth"
-
+save = False
 # TODO - transforms - handle the dataset...
 class VoxelsDataset(Dataset):
     """
@@ -54,6 +54,8 @@ class VoxelsDataset(Dataset):
         self.transform = transform
 
     def __len__(self):
+        """Length of object."""
+
         return len([f for f in os.listdir(self.root_dir) if f.endswith(".pt") and f.startswith(self.index_prefix + "image")])
 
     def __getitem__(self, index):
@@ -72,9 +74,9 @@ class VoxelsDataset(Dataset):
 
         sample = {'image': img_tensor, 'classes': class_tensor}
 
-        print("Got item", index)
-        print(img_tensor.shape)
-        print(class_tensor.shape)
+        #print("Got item", index)
+        #print(img_tensor.shape)
+        #print(class_tensor.shape)
         
         if self.transform:
             sample = self.transform(sample)
@@ -276,8 +278,9 @@ if __name__ == "__main__":
         print("accuracy of %5s : %.3f %%" % (classes[i], 100*class_correct[i]/class_total[i]))
         #print("\tconfidence %.3f" % class_confs[i]/class_total[i])
 
-    print("Saving model to", save_location)
-    torch.save(unet.state_dict(), save_location)
+    if save:
+        print("Saving model to", save_location)
+        torch.save(unet.state_dict(), save_location)
 
     # TODO does this show images?
     # imshow(torchvision.utils.make_grid(images[0]))

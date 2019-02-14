@@ -164,7 +164,8 @@ if __name__ == "__main__":
     print("Loaded.")
 
     # LOAD MODEL #
-    net = CNet()
+    ## TODO - check batch size QUESTION 
+    net = CNet(in_channels=15, drop_rate=0, n_classes=14) # bn_size=batch_size
     net.float()
     print("Moving model to", device)
     net = net.to(device)
