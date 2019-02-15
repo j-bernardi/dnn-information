@@ -16,7 +16,7 @@ batch_size = 1 #8
 workers = 1 #2# Cuda count gpus? not sure
 # Label smoothing - 0.1
 label_smoothing = 0.1
-
+number_samples = 5
 validation_split = 0.2
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -153,8 +153,9 @@ if __name__ == "__main__":
     print("Loading images")
     scan_dataset = VoxelsDataset(location, index_prefix)
     trainloader, testloader, classes = load_data(scan_dataset, batch_size,
-                                                 workers, validation_split)
+                                                 workers, validation_split, num=number_samples)
     print("Loaded.")
+    print("len ")
 
     # LOAD MODEL #
     unet = UNet3D()
@@ -185,6 +186,8 @@ if __name__ == "__main__":
 
         # Iterate through data #
         for i, data in enumerate(trainloader, 0):
+
+            #print("i data", i)
 
             if i == idxs[next_idx]:
                 # update the learning rate
@@ -220,6 +223,8 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
+
+            torch.cuda.empty_cache()
 
         # Track loss per epoch
         print('[Epoch %d complete] loss: %.3f' %

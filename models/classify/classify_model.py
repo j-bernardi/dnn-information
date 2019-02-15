@@ -191,7 +191,7 @@ class CNet(nn.Module):
         out = F.relu(y, inplace=True)
         out = F.adaptive_avg_pool3d(out, (1, 1, 1)).view(out.size(0), -1)
 
-        print("out", out.size())
+        #print("out", out.size())
 
         return out
 
