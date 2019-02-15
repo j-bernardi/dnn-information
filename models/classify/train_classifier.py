@@ -8,12 +8,12 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
 # for 160,000 iterations
-epochs = 1# for data: 160000
+epochs = 5# for data: 160000
 # The initial learning rate was 0.02
 learn_rate_0 = 0.02
 # batch sizes - 8
 batch_size = 1 #8
-number_samples = 5 # 0 for all
+number_samples = 0 # 0 for all
 # workers - on 8 graphics processing units (GPUs)
 # spread across 8 GPUs with 1 sample per GPU with dataset 3 in Supplementary Table 3.
 workers = 1 #2# Cuda count gpus? not sure
