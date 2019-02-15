@@ -8,8 +8,12 @@ Image taken from De Fauw et al. (2018)
 
 ## Segmentation
 
-### unet
+### 3D UNet
 
 Network to segment based on 3D U-Net implementation (De Fauw et al. (2018), Ozg ̈un C ̧ i ̧cek et al. (2016)). Enter for details.
 
 ## Classification
+
+### DenseNet
+
+Network to take the segmentation map output to classify a referral decision and predicted diagnosis. Based on De Fauw et al. (2018) and Huang et al. (2016).
