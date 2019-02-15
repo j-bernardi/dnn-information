@@ -13,7 +13,7 @@ epochs = 5# for data: 160000
 learn_rate_0 = 0.02
 # batch sizes - 8
 batch_size = 1 #8
-number_samples = 0 # 0 for all
+number_samples = 5 # 0 for all
 # workers - on 8 graphics processing units (GPUs)
 # spread across 8 GPUs with 1 sample per GPU with dataset 3 in Supplementary Table 3.
 workers = 1 #2# Cuda count gpus? not sure
@@ -31,7 +31,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 index_prefix = ""
 location = "data/segmented_tensors/dummy_half_slice_sample_scans/"
 
-save_location = "models/unet/saved_models/classification.pth"
+save_location = "models/classify/saved_models/classification.pth"
 save = True
 
 # TODO - and added some (1 × 10−5) weight decay.
@@ -257,8 +257,8 @@ if __name__ == "__main__":
             optimizer.step()
             running_loss += loss.item()
 
-            # helps?
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+	            torch.cuda.empty_cache()
 
         # Track loss per epoch
         print('[Epoch %d complete] loss: %.3f' %
@@ -282,6 +282,7 @@ if __name__ == "__main__":
             
             # Scatter labels into one-hot format
             labels = torch.zeros_like(outputs).scatter(1, labels, 1)
+            labels = labels.type(torch.long)
             
             # predicted is the predicted class for each position - (bs,1,z,x,y)
             _, predicted = torch.max(outputs.data, 1)

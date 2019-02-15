@@ -35,13 +35,11 @@ class CNet(nn.Module):
         sz_small = (23, 60, 70)
         self.first = self.bilinear(in_channels, in_channels, size=sz)
 
-        # TODO - sizes
         self.a11 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a12 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
 
-        # TODO - channels and sizes
         self.down12 = self.downsample(in_channels, in_channels, conv=False)
 
         self.a21 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -256,7 +254,7 @@ class CNet(nn.Module):
         # max pool - halve the number of modules
         mods.append(nn.MaxPool3d(kernel_size=2, stride=2))
         if conv:
-            mods += self.conv_once(in_channels, out_channels)
+            mods.append(self.conv_once(in_channels, out_channels))
 
         return nn.Sequential(*mods)
 

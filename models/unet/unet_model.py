@@ -35,7 +35,9 @@ class UNet3D(nn.Module):
         """
 
         # Down-sizes from the paper
-        #self.sizes = [(0,0,0), (9, 448, 512), (9, 224, 256), (9, 112, 128), (7, 56, 64), 
+        #self.sizes = [(0,0,0), (9, 448, 512), (9, 224, 256), (9, 112, 128), (9, 56, 64), 
+        #              (7, 28, 32), (5, 14, 16), (3, 7, 8), (1, 1, 1)]
+        #self.sizes2 = [(0,0,0), (9, 448, 512), (9, 224, 256), (9, 112, 128), (7, 56, 64), 
         #              (5, 28, 32), (3, 14, 16), (1, 7, 8), (1, 1, 1)]
 
         # Smaller down-sizes:
@@ -47,6 +49,7 @@ class UNet3D(nn.Module):
 
         self.in_channel = in_channel
         self.n_classes = n_classes
+
         if device == "find":
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         else: 
@@ -55,69 +58,49 @@ class UNet3D(nn.Module):
         super(UNet3D, self).__init__()
 
         ## ENCODING ##
-        xy_kernel = (1,3,3)# (3,3,1) # or 1,3,3 ?
-        z_kernel = (3,1,1) # (1,1,3) # or 3,1,1 ?
+        xy_kernel, z_kernel = (1,3,3), (3,1,1) 
         xy_padding = (0,1,1)
+        bottom_channels = 256 # TEMP : 4096
+
         # Level 1-1
         # QUESTION: this to get 32 channels in layer 1?
         self.ec_init = self.encoder(self.in_channel, 32, padding=0, kernel_size=1, n_convs=1)
-        # QUESTION - say used 3x3x1 conv with padding but this increases the z-dimension?
-        self.ec11 = self.encoder(32, 32, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
-
-        # TODO 
+        self.ec11 = self.encoder(32, 32, padding=xy_padding, kernel_size=xy_kernel, n_convs=3)
         self.down12 = self.bilinear(32, 32, size=self.sizes[2])
 
         # Level 2->2
-        self.ec22 = self.encoder(32, 32, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
-        
-        # TODO 
+        self.ec22 = self.encoder(32, 32, padding=xy_padding, kernel_size=xy_kernel, n_convs=3)
         self.down23 = self.bilinear(32, 32, size=self.sizes[3])
 
         # Level 3->3
-        self.ec33 = self.encoder(32, 32, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
-        
-        # TODO 
+        self.ec33 = self.encoder(32, 32, padding=xy_padding, kernel_size=xy_kernel, n_convs=3)
         self.down34 = self.bilinear(32, 64, size=self.sizes[4])
 
         # Level 4->4
         self.ec441 = self.encoder(64, 64, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
         self.ec442 = self.encoder(64, 64, padding=0, kernel_size=z_kernel) # turquoise
-        
-        # TODO 
         self.down45 = self.bilinear(64, 128, size=self.sizes[5])
 
         # Level 5->5
         self.ec551 = self.encoder(128, 128, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
         self.ec552 = self.encoder(128, 128, padding=0, kernel_size=z_kernel) # turquoise
-        
-        # TODO 
         self.down56 = self.bilinear(128, 128, size=self.sizes[6])
 
         # Level 6->6
         self.ec661 = self.encoder(128, 128, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
         self.ec662 = self.encoder(128, 128, padding=0, kernel_size=z_kernel) # turquoise
-        
-        # TODO 
         self.down67 = self.bilinear(128, 256, size=self.sizes[7])
 
         # Level 7->7
         self.ec771 = self.encoder(256, 256, padding=xy_padding, kernel_size=xy_kernel, n_convs=3) # green
         self.ec772 = self.encoder(256, 256, padding=0, kernel_size=z_kernel) # turquoise
-        
-        # TODO 
-        # temporary number of channels
-        self.down78 = self.bilinear(256, 256, size=self.sizes[8])
+        self.down78 = self.bilinear(256, bottom_channels, size=self.sizes[8])
 
         # level 8->8
-        # TODO - back to 4092
-        # temporary number of channels
-        self.ec88 = self.n_linear(256, 256, n_layers=5) # pink arrow
+        self.ec88 = self.n_linear(bottom_channels, bottom_channels, n_layers=5) # pink arrow
 
-        ## DECODING AND UPSAMPLING[moved into forward] ##
-        # TODO - how to reduce number of channels by 1/2 while doing 4 convs
-        # Probably split the decrease into 4 chunks within the decoder function?
-        # temporary number of channels
-        self.up87 = self.bilinear(256, 256, size=self.sizes2[7])
+        ## DECODING AND UPSAMPLING##
+        self.up87 = self.bilinear(bottom_channels, 256, size=self.sizes2[7])
         self.dc77 = self.decoder(256*2, 256, kernel_size=xy_kernel, padding=xy_padding, n_convs=4)
         self.up76 = self.bilinear(256, 128, size=self.sizes2[6])
         self.dc66 = self.decoder(128*2, 128, kernel_size=xy_kernel, padding=xy_padding, n_convs=4)
@@ -129,11 +112,9 @@ class UNet3D(nn.Module):
         self.dc33 = self.decoder(32*2, 32, kernel_size=xy_kernel, padding=xy_padding, n_convs=3)
         self.up32 = self.bilinear(32, 32, size=self.sizes2[2])
         self.dc22 = self.decoder(32*2, 32, kernel_size=xy_kernel, padding=xy_padding, n_convs=3)
-        # QUESTION - is this the right place to have classes - or some way to reduce num of slices back to 1?
         self.up21 = self.bilinear(32, 32, size=self.sizes2[1])
         self.dc11 = self.decoder(32*2, self.n_classes, kernel_size=xy_kernel, padding=xy_padding, n_convs=3)
-        # Into classes - maybe this is the same as above?
-        # TODO: implement this - probably is the one above
+        # QUESTION: needed?
         # self.dc10 = self.decoder(32, n_classes, kernel_size=xy_kernel, padding=1, n_convs=4)
 
     def forward(self, x):
@@ -213,8 +194,9 @@ class UNet3D(nn.Module):
         # l8 - the very bottom most encoded
         e_bottom_left = e_bottom_left.view(e_bottom_left.size(0), -1)
         batch_size = e_bottom_left.size()[0]
+        
         e_bottom_right = self.ec88(e_bottom_left)
-        # TODO - change the view so that 1st arg is batch size again
+        
         e_bottom_right = e_bottom_right.view(batch_size, e_bottom_right.size(1), 1,1,1)
         #print("e_b_r", e_bottom_right.shape)
 
@@ -278,16 +260,11 @@ class UNet3D(nn.Module):
         for n in range(n_convs):
 
             mods.append(nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias))
-            # TODO: Check batchnorm?
             if batchnorm:
                 mods.append(nn.BatchNorm3d(out_channels))
-
-            # TODO - check if activation is ReLU and attached every conv?
             mods.append(nn.ReLU())
 
-        layer = nn.Sequential(*mods)
-
-        return layer
+        return nn.Sequential(*mods)
 
     # QUESTION - figure out align_corners
     def bilinear(self, in_channels, out_channels, size):
@@ -313,11 +290,9 @@ class UNet3D(nn.Module):
             n_layer_list.append(nn.Linear(in_channels, out_channels))
             n_layer_list.append(nn.ReLU())
 
-        layer = nn.Sequential(*n_layer_list)
+        return nn.Sequential(*n_layer_list)
 
-        return layer
-
-    # QUESTION
+    # QUESTION - currently just reducing number channels at the final step - or should it be sequential?
     def decoder(self, in_channels, out_channels, kernel_size, stride=1, padding=1, output_padding=0, batchnorm=True, bias=False, n_convs=1):
         """An encoder function (upsample)."""
         mods = []

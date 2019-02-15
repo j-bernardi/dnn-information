@@ -187,8 +187,6 @@ if __name__ == "__main__":
         # Iterate through data #
         for i, data in enumerate(trainloader, 0):
 
-            #print("i data", i)
-
             if i == idxs[next_idx]:
                 # update the learning rate
                 for g in optimizer.param_groups:
@@ -209,22 +207,28 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
 
+            ## TODO ## 
+            # outputs = torch.zeros_like()
+            # For z in range(len(data.select_indexes(3))):
+            #     find the z-4 and z+4 slices (ignore outer layers)
+            #     concatenate unet(these_slices) to an output vector
+
             outputs = unet(inputs)
 
             # Per-voxel x-entropy, with 0.1 label-smoothing regularization
-            # TODO - verify calc_loss
             # TODO: What does it mean to be per-voxel?
             # Voxel is one of the 9 slices passed as input
-            # Some sort of "for z-layer in input (average(loss))?"
+            
             #print("Outputs", outputs.shape)
             #print("Labels", labels.shape)
+            
             loss = calc_loss(outputs, labels, batch_size, smoothing=label_smoothing)
 
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
-
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         # Track loss per epoch
         print('[Epoch %d complete] loss: %.3f' %
