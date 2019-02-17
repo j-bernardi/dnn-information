@@ -201,8 +201,8 @@ class UNet3D(nn.Module):
         #print("e_b_r", e_bottom_right.shape)
 
         #print("SIZE BEFORE DEL", torch.cuda.max_memory_allocated())
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        #if torch.cuda.is_available():
+        #    torch.cuda.empty_cache()
             #print("SIZE AFTER DEL", torch.cuda.max_memory_allocated())
 
         ## DECODE ##

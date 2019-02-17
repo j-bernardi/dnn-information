@@ -2,12 +2,12 @@ import pickle, torch, os
 
 x = int(448/4)#28#*16#= 448
 y = int(512/4)#32#*16#= 512
-z = 9#8 #*16#= 128
+z = 16#8 #*16#= 128
 classes = 15
 to_generate = 10
 
 root_dir = "data/input_tensors/"
-this_dir = "dummy_half_slice_sample_scans/"
+this_dir = "sample_scans/"
 
 save_loc = root_dir + this_dir
 

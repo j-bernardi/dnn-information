@@ -7,13 +7,14 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
 # for 160,000 iterations
-epochs = 10# for data: 160000
+epochs = 2# for data: 160000
 # The initial learning rate was 0.0001
 learn_rate_0 = 0.0001
 # batch sizes - 8
 batch_size = 1 #8
 # workers - on 8 graphics processing units (GPUs)
 workers = 1 #2# Cuda count gpus? not sure
+voxel_size = 9
 # Label smoothing - 0.1
 label_smoothing = 0.1
 number_samples = 5
@@ -23,10 +24,10 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # with dataset 1 in Supplementary Table 3
 index_prefix = ""
-location = "data/input_tensors/dummy_half_slice_sample_scans/"
+location = "data/input_tensors/sample_scans/"
 
 save_location = "models/unet/saved_models/unet.pth"
-save = False
+save = True
 # TODO - transforms - handle the dataset...
 class VoxelsDataset(Dataset):
     """
@@ -83,7 +84,7 @@ class VoxelsDataset(Dataset):
         return sample
 
 
-def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True):
+def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True, num=0):
     """
     Loads the data from location specified.
     """
@@ -93,7 +94,10 @@ def load_data(scan_dataset, batch_size, workers, val_split, shuffle=True):
     ])
 
     # Creating data indices for training and validation splits:
-    dataset_size = len(scan_dataset)
+    if num > 0:
+        dataset_size = num
+    else:
+        dataset_size = len(scan_dataset)
     indices = list(range(dataset_size))
     split = int(np.floor(validation_split * dataset_size))
     if shuffle:
@@ -155,7 +159,8 @@ if __name__ == "__main__":
     trainloader, testloader, classes = load_data(scan_dataset, batch_size,
                                                  workers, validation_split, num=number_samples)
     print("Loaded.")
-    print("len ")
+    print("len trainset", len(trainloader))
+    print("len testset", len(testloader))
 
     # LOAD MODEL #
     unet = UNet3D()
@@ -174,8 +179,6 @@ if __name__ == "__main__":
 
     # Data: 448x512x128 image
     # The input for each of the 128 slices is a 448 × 512 × 9 voxels image
-    #   TODO: load in the 4 slices either side to pass the 448x512x9 to the network
-    # no padding
 
     ## TRAIN ##
     print("Starting training.")
@@ -202,33 +205,51 @@ if __name__ == "__main__":
             inputs, labels = inputs.to(device), labels.to(device)
             #print("inputs shape", inputs.shape, "labels shape", labels.shape)
 
-            # TODO - for each plane, pass the 4 either side
-            # e.g. 9 slices per slice to the network to train on - outputs 3d image still
-
-            optimizer.zero_grad()
-
-            ## TODO ## 
-            # outputs = torch.zeros_like()
-            # For z in range(len(data.select_indexes(3))):
-            #     find the z-4 and z+4 slices (ignore outer layers)
-            #     concatenate unet(these_slices) to an output vector
-
-            outputs = unet(inputs)
-
-            # Per-voxel x-entropy, with 0.1 label-smoothing regularization
-            # TODO: What does it mean to be per-voxel?
-            # Voxel is one of the 9 slices passed as input
+            first = True
             
-            #print("Outputs", outputs.shape)
-            #print("Labels", labels.shape)
-            
-            loss = calc_loss(outputs, labels, batch_size, smoothing=label_smoothing)
+            # For each slice in the input image
+            print("i", i)
+            for z in range(inputs.size(2)):
 
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+                # find the z-4 and z+4 slices for a 9 voxel size
+                strt, lst = z - voxel_size // 2, z + voxel_size // 2
+                
+                # Skip the outer voxels
+                if strt < 0 or lst >= inputs.size(2):
+                    continue
+
+                optimizer.zero_grad()
+
+                # Indices of the slices to pass to the network
+                indices = torch.from_numpy(np.array(range(strt, lst+1))).long().to(device)
+
+                # Get the 9 slices for the central slice
+                this_voxels = torch.index_select(inputs, 2, indices)
+                #print("voxels shape", this_voxels.shape)
+
+                # Get the xy labels for the central slice
+                these_labels = torch.index_select(labels, 2, torch.tensor([z]).to(device))
+                #print("label shape", these_labels.shape)
+                
+                # Get the classification from the model - just for the central slice
+                #this_class = unet(this_voxels)
+                
+                # Get the one-hot classification from the model - just for the central slice
+                this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
+                #print("outputs shape", this_class.shape)
+
+                # Per-voxel x-entropy, with 0.1 label-smoothing regularization
+                # TODO: Is this what it means to be per-voxel?
+                
+                loss = calc_loss(this_class, these_labels, batch_size, smoothing=label_smoothing)
+
+                loss.backward()
+                optimizer.step()
+                
+                running_loss += loss.item()
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
         # Track loss per epoch
         print('[Epoch %d complete] loss: %.3f' %
@@ -243,12 +264,50 @@ if __name__ == "__main__":
     
     with torch.no_grad():
         for data in testloader:
-            images, labels = data['image'].float(), data['classes']
-            images, labels = images.to(device), labels.to(device)
+            inputs, labels = data['image'].float().to(device), data['classes'].to(device)
 
-            # outputs is probabilities over the 15 classes
-            outputs = unet(images)
-            
+            print("image shape", inputs.shape)
+            #outputs = unet(inputs)
+            #print("output shape", outputs.shape)
+
+            ## HERE ##
+            first = True
+            for z in range(inputs.size(2)):
+                #print("z", z, end=" - ")
+                # find the z-4 and z+4 slices for a 9 voxel size
+                strt, lst = z - voxel_size // 2, z + voxel_size // 2
+                
+                # Skip the outer voxels
+                if strt < 0 or lst >= inputs.size(2):
+                    continue
+
+                indices = torch.from_numpy(np.array(range(strt, lst+1))).long().to(device)
+
+                # TODO - make this output just 1 layer
+                this_voxels = torch.index_select(inputs, 2, indices)
+                #print("voxels shape")
+                
+                #this_class = unet(this_voxels)
+                # take only the middle
+                this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
+                #print("outputs shape", this_class.shape)
+
+                if first:
+                    #print("Creating outputs", this_class.shape)
+                    outputs = this_class
+                    first=False
+                else:
+                    #print("appending outputs + this_class", outputs.shape, "+", this_class.shape)
+                    #print("should be bx15x1xXxY + bx15x(z-4)xXxY")
+                    outputs = torch.cat((outputs, this_class), dim=2)
+            ## TO HERE ##
+
+            #print("outputs shape", outputs.shape)
+            label_idxs = torch.from_numpy(np.array(range(voxel_size//2, labels.size(2)-voxel_size //2))).long().to(device)
+            # IGNORE the outer labels
+            labels = torch.index_select(labels, 2, label_idxs)
+            #print("labels shape", labels.shape)
+            #print("for indexes between", label_idxs[0], label_idxs[-1])
             # Scatter labels into one-hot format
             labels = torch.zeros_like(outputs).scatter(1, labels, 1)
             labels = labels.type(torch.long)

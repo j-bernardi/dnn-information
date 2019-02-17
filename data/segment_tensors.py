@@ -11,12 +11,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 classes = 15
 to_generate = 10
+voxel_size = 9
 
 model_loc = "models/unet/saved_models/unet.pth"
 
 input_root_dir = "data/input_tensors/"
 save_root_dir = "data/segmented_tensors/"
-this_input_dir = "dummy_half_slice_sample_scans/"
+this_input_dir = "sample_scans/"
 
 def make_one_hot(labels, C=15):
     '''
@@ -70,16 +71,49 @@ if __name__ == "__main__":
             if not f.endswith(".pt") or not f.startswith("image"):
                 continue
     
-            # load in
+            # load in the input image - all cells
             this_input = torch.load(input_root_dir + this_input_dir + f)
-            this_input = this_input.reshape(1, 1, this_input.size(0), this_input.size(1), this_input.size(2))
-            this_input = this_input.to(device)
+            this_input = this_input.reshape(1, 1, this_input.size(0), this_input.size(1), this_input.size(2)).to(device)
 
-            # evaluate TODO - make sure these are 1-hot encoded
-            this_output = unet(this_input)
+            ## NEW INPUT ##
+
+            # for each slice, find the 4 either side and classify these
+            first = True
+            for z in range(this_input.size(2)):
+                #print("z", z, end=" - ")
+                # find the z-4 and z+4 slices for a 9 voxel size
+                strt, lst = z - voxel_size // 2, z + voxel_size // 2
+                
+                # Skip the outer voxels
+                if strt < 0 or lst >= this_input.size(2):
+                    continue
+
+                indices = torch.from_numpy(np.array(range(strt, lst+1))).long().to(device)
+
+                # TODO - make this output just 1 layer
+                this_voxels = torch.index_select(this_input, 2, indices)
+                #print("voxels shape")
+                
+                this_class = unet(this_voxels)
+                # tale only the middle
+                this_class = torch.index_select(this_class, 2, torch.tensor([this_class.size(2) // 2]).to(device))
+                #print("outputs shape", this_class.shape)
+
+                if first:
+                    #print("Creating outputs", this_class.shape)
+                    outputs = this_class
+                    first=False
+                else:
+                    #print("appending outputs + this_class", outputs.shape, "+", this_class.shape)
+                    #print("should be bx15x1xXxY + bx15x(z-4)xXxY")
+                    outputs = torch.cat((outputs, this_class), dim=2)
+
+            ## TO HERE ##
+
+            #this_output = unet(this_input)
 
             # get the indexes of all the maxima
-            _, max_matrix = torch.max(this_output.data, 1)
+            _, max_matrix = torch.max(outputs.data, 1)
             
             # make class encoding one-hot
             one_hot = make_one_hot(max_matrix.unsqueeze(0))
@@ -90,6 +124,8 @@ if __name__ == "__main__":
             torch.save(one_hot[0], (save_loc + nm).replace("image", "map"))
 
     # Create a file with some details
+    print("Saving output", one_hot[0].shape)
+    print("To", save_loc)
     with open(save_loc + "details.txt", "w+") as f:
         f.write(str(len([f for f in os.listdir(input_root_dir + this_input_dir) if f.endswith(".pt") and f.startswith("image")])) + " files" 
                 + "\nclasses=" + str(classes))

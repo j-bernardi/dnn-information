@@ -8,7 +8,7 @@ in_classes = 15
 to_generate = 10
 
 save_root_dir = "data/segmented_tensors/"
-this_input_dir = "dummy_half_slice_sample_scans/"
+this_input_dir = "sample_scans/"
 
 save_loc = save_root_dir + this_input_dir
 

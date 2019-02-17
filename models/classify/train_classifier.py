@@ -29,7 +29,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # with dataset 1 in Supplementary Table 3
 index_prefix = ""
-location = "data/segmented_tensors/dummy_half_slice_sample_scans/"
+location = "data/segmented_tensors/sample_scans/"
 
 save_location = "models/classify/saved_models/classification.pth"
 save = True
@@ -200,7 +200,6 @@ if __name__ == "__main__":
     print("Loaded.")
     print("len trainloader", len(trainloader))
     print("len testloader", len(testloader))
-
 
     # LOAD MODEL #
     ## TODO - check batch size QUESTION 
