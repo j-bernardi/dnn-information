@@ -177,7 +177,6 @@ if __name__ == "__main__":
     # Adam optimizer - https://arxiv.org/abs/1412.6980 #
     optimizer = optim.Adam(unet.parameters(), lr=learn_rate_0)
 
-    # Data: 448x512x128 image
     # The input for each of the 128 slices is a 448 × 512 × 9 voxels image
 
     ## TRAIN ##
@@ -225,11 +224,9 @@ if __name__ == "__main__":
 
                 # Get the 9 slices for the central slice
                 this_voxels = torch.index_select(inputs, 2, indices)
-                #print("voxels shape", this_voxels.shape)
 
                 # Get the xy labels for the central slice
                 these_labels = torch.index_select(labels, 2, torch.tensor([z]).to(device))
-                #print("label shape", these_labels.shape)
                 
                 # Get the classification from the model - just for the central slice
                 #this_class = unet(this_voxels)
@@ -266,14 +263,9 @@ if __name__ == "__main__":
         for data in testloader:
             inputs, labels = data['image'].float().to(device), data['classes'].to(device)
 
-            print("image shape", inputs.shape)
-            #outputs = unet(inputs)
-            #print("output shape", outputs.shape)
-
-            ## HERE ##
             first = True
             for z in range(inputs.size(2)):
-                #print("z", z, end=" - ")
+                
                 # find the z-4 and z+4 slices for a 9 voxel size
                 strt, lst = z - voxel_size // 2, z + voxel_size // 2
                 
@@ -283,31 +275,23 @@ if __name__ == "__main__":
 
                 indices = torch.from_numpy(np.array(range(strt, lst+1))).long().to(device)
 
-                # TODO - make this output just 1 layer
                 this_voxels = torch.index_select(inputs, 2, indices)
-                #print("voxels shape")
                 
-                #this_class = unet(this_voxels)
-                # take only the middle
+                # take only the middle slice of the output
                 this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
-                #print("outputs shape", this_class.shape)
-
+                
                 if first:
-                    #print("Creating outputs", this_class.shape)
                     outputs = this_class
                     first=False
                 else:
-                    #print("appending outputs + this_class", outputs.shape, "+", this_class.shape)
-                    #print("should be bx15x1xXxY + bx15x(z-4)xXxY")
                     outputs = torch.cat((outputs, this_class), dim=2)
-            ## TO HERE ##
 
-            #print("outputs shape", outputs.shape)
+            # Find the indexes that have tissue maps
             label_idxs = torch.from_numpy(np.array(range(voxel_size//2, labels.size(2)-voxel_size //2))).long().to(device)
-            # IGNORE the outer labels
+            
+            # IGNORE the outer labels that don't have segmentation maps
             labels = torch.index_select(labels, 2, label_idxs)
-            #print("labels shape", labels.shape)
-            #print("for indexes between", label_idxs[0], label_idxs[-1])
+
             # Scatter labels into one-hot format
             labels = torch.zeros_like(outputs).scatter(1, labels, 1)
             labels = labels.type(torch.long)
@@ -349,6 +333,3 @@ if __name__ == "__main__":
     if save:
         print("Saving model to", save_location)
         torch.save(unet.state_dict(), save_location)
-
-    # TODO does this show images?
-    # imshow(torchvision.utils.make_grid(images[0]))

@@ -30,11 +30,12 @@ class CNet(nn.Module):
             self.device = torch.device(device)
 
         # 1. downsample (or upsample) to input size
-        # TEMP size - actually 
+        # TEMP size
         sz = (43, 300, 350)
         sz_small = (23, 60, 70)
         self.first = self.bilinear(in_channels, in_channels, size=sz)
 
+        # Block 1
         self.a11 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a12 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -42,6 +43,7 @@ class CNet(nn.Module):
 
         self.down12 = self.downsample(in_channels, in_channels, conv=False)
 
+        # Block 2
         self.a21 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a22 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -59,6 +61,7 @@ class CNet(nn.Module):
         self.down23 = self.downsample(in_channels, in_channels // 4, conv=True)
         in_channels = in_channels // 4
 
+        # Block 3
         self.a31 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a32 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -76,6 +79,7 @@ class CNet(nn.Module):
         self.down34 = self.downsample(in_channels, in_channels // 2, conv=True)
         in_channels = in_channels // 2
 
+        # Block 4
         self.a41 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a42 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -93,6 +97,7 @@ class CNet(nn.Module):
         self.down45 = self.downsample(in_channels, int(math.floor(in_channels / 1.5)), conv=True)
         in_channels = int(math.floor(in_channels / 1.5))
 
+        # Block 5
         self.a51 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a52 = self.xy_conv(in_channels, bn_size, growth_rate)
