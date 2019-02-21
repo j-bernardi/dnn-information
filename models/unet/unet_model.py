@@ -8,8 +8,8 @@ https://github.com/jeffkinnison/unet/blob/master/pytorch/unet3d.py
 """
 
 """
-TODO???
-Third, we introduced one extra residual connection within each block of layers, 
+TODO ? 
+We introduced one extra residual connection within each block of layers, 
 so that the output of each block consists of the sum of the features of the last layer, 
 and the first layer of the block in which the features dimensions match. 
 """
@@ -37,15 +37,15 @@ class UNet3D(nn.Module):
         # Down-sizes from the paper
         #self.sizes = [(0,0,0), (9, 448, 512), (9, 224, 256), (9, 112, 128), (9, 56, 64), 
         #              (7, 28, 32), (5, 14, 16), (3, 7, 8), (1, 1, 1)]
-        #self.sizes2 = [(0,0,0), (9, 448, 512), (9, 224, 256), (9, 112, 128), (7, 56, 64), 
-        #              (5, 28, 32), (3, 14, 16), (1, 7, 8), (1, 1, 1)]
+        #self.sizes2 = [(0,0,0), (1, 448, 512), (1, 224, 256), (1, 112, 128), (1, 56, 64), 
+        #              (1, 28, 32), (1, 14, 16), (1, 7, 8), (1, 1, 1)]
 
         # Smaller down-sizes:
         self.sizes = [(0,0,0), (9, 112, 128), (9, 112, 128), (9, 112, 128), (9, 56, 64), 
                       (7, 28, 32), (5, 14, 16), (3, 7, 8), (1, 1, 1)]
         # Back up:
-        self.sizes2 = [(0,0,0), (9, 112, 128), (9, 112, 128), (9, 112, 128), (7, 56, 64), 
-                      (5, 28, 32), (3, 14, 16), (1, 7, 8), (1, 1, 1)]
+        self.sizes2 = [(0,0,0), (1, 112, 128), (1, 112, 128), (1, 112, 128), (1, 56, 64), 
+                      (1, 28, 32), (1, 14, 16), (1, 7, 8), (1, 1, 1)]
 
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -126,12 +126,12 @@ class UNet3D(nn.Module):
         # l1
         e1 = self.ec_init(x)
         syn1 = self.ec11(e1) # init right - l1
-        
         e2 = self.down12(syn1) # l1-2
+
         syn2 = self.ec22(e2) # right l2 (concat later)
         del e1, e2
-        
         e3 = self.down23(syn2) # l2-3
+
         syn3 = self.ec33(e3) # right l3 (concat later)
         del e3 # delete
         e41 = self.down34(syn3) # l3-l4
@@ -163,32 +163,32 @@ class UNet3D(nn.Module):
         e_bottom_right = e_bottom_right.view(batch_size, e_bottom_right.size(1), 1,1,1)
 
         # QUESTION - check this is a simple cat - says "copy and stack"
-        d71 = torch.cat((self.up87(e_bottom_right), syn7), dim=1) # concat on level 7
+        d71 = torch.cat((self.up87(e_bottom_right), self.select_middle(syn7)), dim=1) # concat on level 7
         del e_bottom_left, e_bottom_right
         d72 = self.dc77(d71) # move right on level 7 (decode)
         del d71, syn7
 
-        d61 = torch.cat((self.up76(d72), syn6), dim=1)
+        d61 = torch.cat((self.up76(d72), self.select_middle(syn6)), dim=1)
         del d72, syn6
         d62 = self.dc66(d61)
 
-        d51 = torch.cat((self.up65(d62), syn5), dim=1)
+        d51 = torch.cat((self.up65(d62), self.select_middle(syn5)), dim=1)
         del d61, d62, syn5
         d52 = self.dc55(d51)
 
-        d41 = torch.cat((self.up54(d52), syn4), dim=1)
+        d41 = torch.cat((self.up54(d52), self.select_middle(syn4)), dim=1)
         del d51, d52, syn4
         d42 = self.dc44(d41)
 
-        d31 = torch.cat((self.up43(d42), syn3), dim=1)
+        d31 = torch.cat((self.up43(d42), self.select_middle(syn3)), dim=1)
         del d41, d42, syn3
         d32 = self.dc33(d31)
 
-        d21 = torch.cat((self.up32(d32), syn2), dim=1)
+        d21 = torch.cat((self.up32(d32), self.select_middle(syn2)), dim=1)
         del d31, d32, syn2
         d22 = self.dc22(d21)
 
-        d11 = torch.cat((self.up21(d22), syn1), dim=1)
+        d11 = torch.cat((self.up21(d22), self.select_middle(syn1)), dim=1)
         del d21, d22, syn1
         d12 = self.dc11(d11)
         
@@ -212,7 +212,6 @@ class UNet3D(nn.Module):
 
         return nn.Sequential(*mods)
 
-    # QUESTION - figure out align_corners
     def bilinear(self, in_channels, out_channels, size):
         """Up/Downsample by bilinear interpolation."""
 
@@ -238,17 +237,19 @@ class UNet3D(nn.Module):
 
         return nn.Sequential(*n_layer_list)
 
-    # QUESTION - currently just reducing number channels at the final step - or should it be sequential?
+    # NOTE - currently just reducing number channels at the first step - question for DeepMind
     def decoder(self, in_channels, out_channels, kernel_size, stride=1, padding=1, output_padding=0, batchnorm=True, bias=False, n_convs=1):
         """An encoder function (upsample)."""
         mods = []
         out = in_channels
 
         for n in range(n_convs):
-            if n == n_convs - 1:
+            #if n == n_convs - 1:
+            if n == 0:
                 out = out_channels 
             mods.append(nn.Conv3d(in_channels, out, kernel_size, stride=stride,
                                padding=padding, bias=bias))
+            in_channels = out
             # TODO: Check batchnorm?
             if batchnorm:
                 mods.append(nn.BatchNorm3d(out))
@@ -257,6 +258,11 @@ class UNet3D(nn.Module):
         layer = nn.Sequential(*mods)
 
         return layer
+
+    def select_middle(self, syn_large):
+        """Returns the middle depth layer of the vector to be passed across."""
+
+        return torch.index_select(syn_large, 2, torch.tensor(syn_large.size(2) // 2).to(self.device))
 
 
 class Interpolate(nn.Module):

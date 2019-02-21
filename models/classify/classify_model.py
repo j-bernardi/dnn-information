@@ -15,7 +15,7 @@ class CNet(nn.Module):
         self.xy_padding, self.z_padding = (0,1,1), (1,0,0)
 
         # The number of channels appended by a layer
-        self.growth_rate = growth_rate
+        self.growth_rate = growth_rate # TODO - maybe not necessary as dynamic
         self.in_channels = in_channels
         
         # Bottleneck size - e.g. bottlneck layer has growth-rate * bottleneck
@@ -33,17 +33,21 @@ class CNet(nn.Module):
         # TEMP size
         sz = (43, 300, 350)
         sz_small = (23, 60, 70)
-        self.first = self.bilinear(in_channels, in_channels, size=sz)
+        self.first = self.bilinear(in_channels, in_channels, size=sz_small)
 
         # Block 1
+        growth_rate = (32 - in_channels) // 2
         self.a11 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
+        growth_rate = 32 - in_channels
         self.a12 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
 
-        self.down12 = self.downsample(in_channels, in_channels, conv=False)
+        # TEMP - enforce 32?
+        self.down12 = self.downsample(in_channels, 32, conv=False)
 
         # Block 2
+        growth_rate = in_channels // 2
         self.a21 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a22 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -62,6 +66,7 @@ class CNet(nn.Module):
         in_channels = in_channels // 4
 
         # Block 3
+        growth_rate = in_channels // 2
         self.a31 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a32 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -80,6 +85,7 @@ class CNet(nn.Module):
         in_channels = in_channels // 2
 
         # Block 4
+        growth_rate = in_channels // 3
         self.a41 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a42 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -98,6 +104,7 @@ class CNet(nn.Module):
         in_channels = int(math.floor(in_channels / 1.5))
 
         # Block 5
+        growth_rate = in_channels // 6
         self.a51 = self.xy_conv(in_channels, bn_size, growth_rate)
         in_channels += growth_rate
         self.a52 = self.xy_conv(in_channels, bn_size, growth_rate)
@@ -122,9 +129,11 @@ class CNet(nn.Module):
     def forward(self, x):
 
         y = self.first(x)
+        print("init channels", y.shape)
 
         # 1 2 x - y convs at initial size
         y = torch.cat((y, self.a11(y)), 1)
+        print("conv1 channels", y.shape)
         y = torch.cat((y, self.a12(y)), 1)
 
         # Max pooling to 150x175x43
@@ -190,7 +199,7 @@ class CNet(nn.Module):
 
         # TODO - check size out and check gradient being passed
         y = self.last_step(y)
-
+        print("final channels", y.size(1))
         out = F.relu(y, inplace=True)
         out = F.adaptive_avg_pool3d(out, (1, 1, 1)).view(out.size(0), -1)
 
@@ -275,6 +284,7 @@ class CNet(nn.Module):
         return nn.Sequential(*mods)
 
 class Interpolate(nn.Module):
+    
     def __init__(self, size, mode):
         super(Interpolate, self).__init__()
         self.interp = nn.functional.interpolate

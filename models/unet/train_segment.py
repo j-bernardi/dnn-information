@@ -203,8 +203,6 @@ if __name__ == "__main__":
             inputs, labels = data['image'].float(), data['classes']
             inputs, labels = inputs.to(device), labels.to(device)
             #print("inputs shape", inputs.shape, "labels shape", labels.shape)
-
-            first = True
             
             # For each slice in the input image
             print("i", i)
@@ -232,7 +230,9 @@ if __name__ == "__main__":
                 #this_class = unet(this_voxels)
                 
                 # Get the one-hot classification from the model - just for the central slice
-                this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
+                this_class = unet(this_voxels)
+                # OLD: used to output 9-deep, now just outputting 1
+                #this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
                 #print("outputs shape", this_class.shape)
 
                 # Per-voxel x-entropy, with 0.1 label-smoothing regularization
@@ -278,7 +278,9 @@ if __name__ == "__main__":
                 this_voxels = torch.index_select(inputs, 2, indices)
                 
                 # take only the middle slice of the output
-                this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
+                this_class = unet(this_voxels)
+                # OLD: used to output 9-deep, now just outputting 1
+                #this_class = torch.index_select(unet(this_voxels), 2, torch.tensor([voxel_size // 2]).to(device))
                 
                 if first:
                     outputs = this_class
