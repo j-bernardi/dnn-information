@@ -310,9 +310,11 @@ def test(params, shape, numel, classes):
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
     
+    
     ## LOAD DATA ##
     trainloader, testloader, classes = load_data(params)
 
+    """
     for i, data in enumerate(trainloader, 0):
 
         inputs, labels, _ = data
@@ -344,4 +346,4 @@ if __name__ == "__main__":
     if params["save"]:
         print("\nSaving model to", params["save_location"])
         torch.save(unet.state_dict(), params["save_location"])
-    """
+    
