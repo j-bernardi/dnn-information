@@ -1,4 +1,4 @@
-import torch
+import torch, sys
 import torch.nn.functional as F
 import numpy as np
 
@@ -132,30 +132,65 @@ def calc_loss(pred, gold, smoothing=0, one_hot=True):
 def calc_adj(class_tensor):
     """
     Input: 
-        An (X x Y) matrix of n class integers.
+        Am (X x Y) matrix of n class integers.
 
     Output:
-        A matrix of dimension nxn signalling adjacency.
-        DECIDE:
-            Weightings or true / false?
-            Maybe one function for each?
+        A matrix of dimension nxn 
+            signalling adjacency of class: row to class: col
     """
-    class_tensor = class_tensor.int()
+    def reduce(tens, axis):
+        """Reduces 2d tensor in 0 and 1 dims by 1."""
+        if axis == 0:
+            return tens[:tens.shape[0]-1, :tens.shape[1]]
+        elif axis == 1:
+            return tens[:tens.shape[0], :tens.shape[1]-1]
+        elif axis == (0,1):
+            return tens[:tens.shape[0]-1, :tens.shape[1]-1]
+        else:
+            raise NotImplementedError
 
-    n = torch.max(class_tensor).item() + 1
-    print("Got", n, "classes.")
+    if len(class_tensor.shape) != 2:
+        raise NotImplementedError
 
-    adj_matrix = torch.zeros((n, n))
+    class_tensor = class_tensor.astype(int)
+    n = np.max(class_tensor) + 1
+    
+    # Init
+    adj_matrix = np.zeros((n, n))
 
-    class_diag[i,j] = class_tensor[i+1, j+1]
-    class_to_right[i,j] = class_tensor[i, j+1]
-    class_under[i,j] = class_tensor[i+1, j]
+    # A matrix of the classes under, right, diag of corresponding class
+    class_under = reduce(np.roll(class_tensor, -1, axis=0), axis=0)
+    class_right = reduce(np.roll(class_tensor, -1, axis=1), axis=1)
+    class_diag = reduce(np.roll(class_tensor, (-1,-1), axis=(0,1)), axis=(0,1))
 
-    class_diag = make_one_hot(class_diag)
-    class_to_right = make_one_hot(class_to_right)
-    class_under = make_one_hot(class_under)
+    # Reduce as don't count adjacency to under/right final row/col
+    reduced_class_tensor_under = reduce(class_tensor, axis=0)
+    reduced_class_tensor_right = reduce(class_tensor, axis=1)
+    reduced_class_tensor_diag = reduce(class_tensor, axis=(0,1))
 
+    # For each class in the class tensor
+    for c in range(n):
 
+        # find where equal, all the adjacencies are in under, right, diag. Count dictionary returns
+        under_unique, under_counts = np.unique(np.where(reduced_class_tensor_under==c, class_under, -1), return_counts=True)
+        under_counts = dict(zip(under_unique, under_counts))
+
+        right_unique, right_counts = np.unique(np.where(reduced_class_tensor_right==c, class_right, -1), return_counts=True)
+        right_counts = dict(zip(right_unique, right_counts))
+        
+        diag_unique, diag_counts = np.unique(np.where(reduced_class_tensor_diag==c, class_diag, -1), return_counts=True)
+        diag_counts = dict(zip(diag_unique, diag_counts))
+        
+        # Count occurences per class 
+        for a in range(n):
+            if a in under_counts:
+                adj_matrix[c, a] += under_counts[a]
+            if a in right_counts:
+                adj_matrix[c, a] += right_counts[a]
+            if a in diag_counts:
+                adj_matrix[c, a] += diag_counts[a]
+
+    return adj_matrix
 
 def calc_adj_old(class_tensor):
     """
@@ -242,3 +277,23 @@ def make_one_hot_mine(tens, like):
     one_hot = torch.zeros_like(like).scatter(1, one_hot_labels, 1)
     #print("one hot", one_hot.shape)
     return one_hot
+
+if __name__ == "__main__":
+
+    """
+    USAGE :
+    for i, data in enumerate(trainloader, 0):
+
+        inputs, labels, _ = data
+            
+        inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
+
+        adj = calc_adj(labels[0, :, :].cpu().numpy().astype(int))
+    """
+
+    tst = np.genfromtxt('data/tests/test_matrix.csv', delimiter=',')
+    print(tst.shape)
+    print(tst)
+    adj = calc_adj(tst)
+
+    print(adj)

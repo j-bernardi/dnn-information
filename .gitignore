@@ -1,4 +1,0 @@
-data/csvs/*
-data/input_tensors/*
-data/segmented_tensors/*
-models/unet/saved_models/*

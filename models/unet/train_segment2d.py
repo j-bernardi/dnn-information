@@ -15,8 +15,8 @@ params = tm.params
 params["save"] = True
 params["save_location"] += "/unet2d.pth"
 
-# 0 for all
-number_samples = 10
+# limit number for testing
+number_samples = 10 # 0 for all
 
 # TODO - transforms - handle the dataset...
 
@@ -144,7 +144,7 @@ def test(params, shape, numel, classes):
     print("Testing")
     
     # Total cells classified, total correct, the number of batches seen
-    total, correct_count, num_batches = 0, 0, 0
+    total, total_all_classes, correct_count, num_batches = 0, 0, 0, 0
 
     # Total correct of this class in the prediction
     correct = torch.zeros(shape, device=params["device"], dtype=torch.uint8)
@@ -176,7 +176,13 @@ def test(params, shape, numel, classes):
     total_conf = [] 
     total_pred_count = []
 
+    # predicted class tots
     class_tots = torch.tensor([0] * len(classes), device=params["device"])
+    
+    # labelled class tots
+    label_tots = torch.tensor([0] * len(classes), device=params["device"])
+    #class_tots_all_class = torch.tensor([0] * len(classes), device=params["device"])
+
     d_count = 0
     with torch.no_grad():
         for data in testloader:
@@ -209,7 +215,7 @@ def test(params, shape, numel, classes):
                 confs[c, d_count] = torch.sum(this_confs[:,c,:,:]).item()
                 pred_counts[c, d_count] = torch.sum(one_hot_predicted[:,c,:,:]).item()
 
-            ## CALCULATE CORRECTNESS ## 
+            ## CALCULATE CORRECTNESS ##
 
             # Indicators of correctness across the 9 classes
             correct_indicators = one_hot_predicted + one_hot_labels
@@ -225,11 +231,15 @@ def test(params, shape, numel, classes):
 
             ## INCREASE TOTALS ##
             total += outputs[:,0,:,:].numel() # number of cells in this batch
+            total_all_classes += outputs.numel()
             num_batches += inputs.size(0) # number of batches
             #print("adding to tots", torch.sum(one_hot_predicted, (0,2,3), keepdim=False))
             class_tots += torch.sum(one_hot_predicted, (0,2,3), keepdim=False) # number of cells in this class
         
             d_count += 1
+
+            for i in range(len(classes)):
+                label_tots[i] += (labels.int() == i).sum().item()
 
     ## CALCULATE ACCURACIES PER CLASS ##
 
@@ -241,14 +251,6 @@ def test(params, shape, numel, classes):
     assert len(confs[0]) == len(testloader)
     assert len(pred_counts[0]) == len(testloader)
 
-    # For all classes
-    correct_count = correct.sum().item()
-    #print("correct count", correct_count)
-    #print("total", total)
-    false_positive_count = false_positive.sum()
-    false_negative_count = false_negative.sum()
-    correct_not_labelled_count = correct_not_labelled.sum()
-
     # Per-class info
     class_correct = torch.sum(correct, (0,2,3), keepdim=False)
     class_false_positive = torch.sum(false_positive, (0,2,3), keepdim=False)
@@ -259,8 +261,11 @@ def test(params, shape, numel, classes):
     print("one hot predicted sum", one_hot_predicted.sum())
     assert one_hot_predicted.sum() == total_el_per_batched_class
 
-    # calc overall accuracy
-    overall_accuracy = 100. * (correct_count / total)
+    # calc overall accuracy TODO - check using correct totals
+    overall_accuracy = 100. * (correct.sum().item() / total)
+    overall_false_positive = 100. * false_positive.sum() / total_all_classes
+    overall_false_negative = 100. *  false_negative.sum() / total_all_classes
+    overall_corr_not_label = 100. * correct_not_labelled.sum() / total_all_classes
     
     # Calc average overall confidence
     average_confidences = []
@@ -277,19 +282,24 @@ def test(params, shape, numel, classes):
     average_confidence = 100 * sum(average_confidences)/len(average_confidences)
 
     print("\n*REPORT*\n")
-    print("Accuracy of network on", len(testloader), "test images: %d %%, average confidence %d %%" %\
-        (overall_accuracy, average_confidence))
+    print("Trained on", len(testloader), "test images.")
+    print("Acc: %d%%, AvgConf: %d%% FPos: %d%%  FNeg: %d%% CorrUnlabel: %d%%\n" %\
+        (overall_accuracy, average_confidence, overall_false_positive, 
+            overall_false_negative, overall_corr_not_label))
     
     ## PRINT PER CLASS ## 
     # test t
     for c in range(len(classes)):
 
-        # Try to get accuracy
+        # Try to get accuracy TODO - check using correct sums
         try:
             this_acc = 100*class_correct[c].item()/class_tots[c].item()
+            this_false_pos = 100*class_false_positive[c].item()/class_tots.sum().item()
+            this_false_neg = 100*class_false_negative[c].item()/class_tots.sum().item()
+            this_correct_not_label = 100*class_correct_not_labelled[c].item()/class_tots.sum().item()
         except ZeroDivisionError:
             print("err")
-            this_acc = -1
+            this_acc, this_false_pos, this_false_neg, this_correct_not_label = -1, -1, -1, -1
         
         # Try to get confidence
         this_avgs = []
@@ -303,8 +313,9 @@ def test(params, shape, numel, classes):
         
         this_conf = 100 * sum(this_avgs) / len(this_avgs)        
         
-        print("accuracy of %5s : %.3f %% with confidence %.3f %%" %\
-            (classes[c], this_acc, this_conf ))
+        print("%5s Acc: %d%% Conf: %.3f%% FPos: %d%% FNeg: %d%% CorrUnLab: %d%% on %d predicted labels (%d actual)." %\
+            (classes[c], this_acc, this_conf, this_false_pos, 
+                this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
 
 
 if __name__ == "__main__":
@@ -314,25 +325,6 @@ if __name__ == "__main__":
     ## LOAD DATA ##
     trainloader, testloader, classes = load_data(params)
 
-    """
-    for i, data in enumerate(trainloader, 0):
-
-        inputs, labels, _ = data
-            
-        inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
-
-        st = time.time()
-        adj = calc_adj(labels)
-        en = time.time()
-
-        print("Took", en-st, "s")
-
-        for batch in len(adj):
-            for row in len(adj[batch, :, :]):
-                print(adj[row,:])
-        sys.exit()
-
-    """
     # LOAD MODEL #
     unet = load_model(params)
 
@@ -341,9 +333,12 @@ if __name__ == "__main__":
 
     print("Training complete")
     
+    ## TEST ##
     test(params, shape, numel, classes)
 
     if params["save"]:
         print("\nSaving model to", params["save_location"])
         torch.save(unet.state_dict(), params["save_location"])
+    
+    
     
