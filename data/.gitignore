@@ -3,3 +3,4 @@ csvs
 input_tensors
 segmented_tensors
 tests
+training_data/*

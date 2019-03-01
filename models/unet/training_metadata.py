@@ -1,4 +1,4 @@
-import torch, sys
+import torch, os
 import torch.nn.functional as F
 import numpy as np
 
@@ -12,18 +12,35 @@ params = {
     "batch_size" : 1,
     "workers" : 4,
     "voxel_size" : 9,
+    "smoothing_type": "weighted_vary_eps",
     "label_smoothing" : 0.1,
     "validation_split" : 0.2,
     "device" : torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     "lr_idxs_array": np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95]),
     "lr_array": np.array([1, 0.5, 0.25, 0.125, 0.015625, 0.00390625, 0.001953125]),
     "save_location": "models/unet/saved_models",
-    "scan_location": "data/input_tensors/segmentation_data/datasets/"
+    "scan_location": "data/input_tensors/segmentation_data/datasets/",
+    "save_run": True,
+    "save_to_dir": "data/training_data/"
 }
 
 # TODO - transforms - handle the dataset...
 
-def calc_loss(pred, gold, smoothing=0, one_hot=True):
+def construct_file():
+    """Produces file with headers."""
+
+    file_name = params["smoothing_type"] + "_" + str(params["batch_size"]) + "_" + str(params["epochs"]) + "/"
+    
+    if not os.path.exists(params["save_to_dir"] + file_name):
+        os.makedirs(params["save_to_dir"] + file_name)
+
+    with open(params["save_to_dir"] + file_name +"DETAILS.txt", 'w') as file:
+        for key in params:
+            file.write(key + ": " + str(params[key]) + "\n")
+
+    return params["save_to_dir"] + file_name + ".txt"
+
+def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform", smoothing=0):
     """
     Calc CEL and apply label smoothing.
     Came from:
@@ -31,34 +48,137 @@ def calc_loss(pred, gold, smoothing=0, one_hot=True):
     Inputs:
         pred - b,C,X,Y,(Z) tensor of floats - indicating predicted class probabilities
         gold - b,X,Y,(Z) tensor of integers indicating labelled class
+    Args:
+        one_hot: if False, just return "standard" cross entropy loss, else apply smoothing:
+        smoothing_type: "uniform", "weighted_fixed_eps" or "weighted_vary_eps" 
+            Uniform applies uniform smoothing
+            Weighted fixed eps applies weighted smoothing, ignoring self-adjacency
+            Weighted vary eps applies weighted smoothing, accounting self-adj
+        smoothing: magnitude of label smoothing (e.g. one-hot 1 -> 1 - smoothing)
+            Acts as the base for varying eps
     """
 
+    # Cleanse class input
     gold = gold.long()
 
+    # If one hot encoding
     if one_hot:
-        
-        #gold = gold.contiguous().view(-1)
-    
-        eps = 0.1
+
+        n_batch = pred.size(0)
         n_class = pred.size(1)
 
+        ## CHECK INPUT for 3D and RESHAPE for one-hot ##
         if len(gold.shape) == 3:
-            one_hot = make_one_hot(gold.view(gold.size(0), 1, gold.size(1), gold.size(2)))
+            reshaped_gold = gold.view(gold.size(0), 1, gold.size(1), gold.size(2))
         else:
             raise NotImplementedError("Only implemented for batch x X x Y (3D)\nGot %s." %\
                 (len(gold.shape)))
+        
+        ## MAKE ONE HOT ##
+        one_hot = make_one_hot(reshaped_gold, n_class)
+
+        ## APPLY SMOOTHING ##
+        if smoothing_type == "uniform":
+            # Apply uniform epsilon smoothing
+            
+            eps = smoothing
+            one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+        
+        elif smoothing_type.startswith("weighted"):
+            # Get the weighted epsilons based on class adjacency
+
+            # Tensor of (batch, class_name, class_name_adj_to) = count
+            adj_matrix = calc_adj_batch(gold.cpu().numpy())
+            #print(adj_matrix.astype(int))
+
+            # Base smoothing on the class-class adjacency
+            eps = np.zeros((n_batch, n_class)) + smoothing
+
+            # The smoothing per class
+            eps_tens = np.zeros((n_batch, n_class, n_class))
+
+            # Get the class-class epsilon - fixed or variable - if required, and add to base
+            if smoothing_type == "weighted_vary_eps": 
+                # Vary epsilon depending on adjacencies
+                for c in range(adj_matrix.shape[1]):
+                    #print("eps[:,", c, "]", ((adj_matrix[:, c, :c].sum() + adj_matrix[:, c, (c+1):].sum()) / adj_matrix[:, c, c]))
+                    eps[:, c] +=  ((adj_matrix[:, c, :c].sum() + adj_matrix[:, c, (c+1):].sum()) / adj_matrix[:, c, c])[0]
+
+            # Now build the up tensor amd weight
+            for i in range(eps_tens.shape[1]):
+                
+                # Set the inter-class error
+                eps_tens[:, i, i] = eps[:, i]
+
+                # Get the row that isn't the c-c error
+                #print("concat")
+                #print(adj_matrix[:, i, :i])
+                #print("with")
+                #print(adj_matrix[:, i, (i+1):])
+                #print("is", np.concatenate((adj_matrix[:, i, :i], adj_matrix[:, i, (i+1):]), axis=1))
+                rest = np.concatenate((adj_matrix[:, i, :i], adj_matrix[:, i, (i+1):]), axis=1)
+
+                assert len(rest.shape) == 2
+                
+                # Normalise so adds to the size of the error (eps[i])
+                #rest = eps[i] * (rest / rest.sum())
+                for b in range(rest.shape[0]):
     
-        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+                    # TODO - don't normalise to 1, normalise to 1-eps                    
+                    rest[b] = eps[b, i] * (rest[b] / rest[b].sum())
+
+                    #print("normalised", eps[b, i] * (rest[b] / rest[b].sum()))
+
+                    #print("sum of rest", rest.sum())
+                    #print("sum+eps", (rest[b].sum() - eps[b, i]) + 1.)
+
+                    assert (rest[b].sum() - eps[b, i]) + 1. > 0.95
+                    assert (rest[b].sum() - eps[b, i]) + 1. < 1.05
+                    assert (rest[b].sum() - eps[b, i]) + 1. == 1.
+
+                # Put it back in
+                eps_tens[:, i, :i] = rest[:, :i]
+                eps_tens[:, i, (i+1):] = rest[:, i:]
+
+                # TODO - fix so looks right
+                #print(eps_tens)
+
+                # Now set one hot
+                adj = (1. - eps_tens[:, gold[:,:,:].cpu().numpy(), i])
+                #print("adj shape", adj.shape)
+                # TODO - multiply tensors - not working
+                smooth_one = one_hot[:,i,:,:].float() * torch.from_numpy(adj).to(params["device"]).float()#[:,:,:]
+                adj2 = eps_tens[:, gold[:,:,:].cpu().numpy(), i]
+                smooth_others = (1. - one_hot[:,i,:,:].float()) * torch.from_numpy(adj2).to(params["device"]).float()#[:,:,:]
+                one_hot[:,i,:,:] =  smooth_one + smooth_others #/ (n_class -1)
+
+                #print(one_hot[0,:,1,2])
+
+        else:
+            raise NotImplementedError
+
+        ## CALC LOSS ##
         log_prb = F.log_softmax(pred, dim=1)
 
         non_pad_mask = gold.ne(0) # NOT SURE WHAT DOES - JUST COPIED
         loss = -(one_hot * log_prb).sum(dim=1)
         loss = loss.masked_select(non_pad_mask).sum()  # average later
+    
+    # loss from pred and gold, not one-hot    
     else:
-        # loss from pred and gold, not one-hot
+
         loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')
 
     return loss
+
+def calc_adj_batch(class_batch):
+    """Performs calc_adj on each matrix of classes in a batch."""
+
+    adj_batch = np.array([calc_adj(class_batch[i,:,:]) for i in range(class_batch.shape[0])])
+
+    #print(adj_batch.shape)
+
+    return adj_batch
 
 def calc_adj(class_tensor):
     """
@@ -157,20 +277,10 @@ def make_one_hot(tens, C=9):
         
     return target
 
-def make_one_hot_mine(tens, like):
-
-    #one_hot_labels = gold.view(-1, 1).type(torch.long) # OLD
-    #print("gold", gold.shape)
-    one_hot_labels = tens.type(torch.long)
-    #print("one hot labels", one_hot_labels.shape)
-    one_hot = torch.zeros_like(like).scatter(1, one_hot_labels, 1)
-    #print("one hot", one_hot.shape)
-    return one_hot
-
 if __name__ == "__main__":
 
     """
-    USAGE :
+    USAGE of calc_adj:
     for i, data in enumerate(trainloader, 0):
 
         inputs, labels, _ = data
@@ -181,8 +291,9 @@ if __name__ == "__main__":
     """
 
     tst = np.genfromtxt('data/tests/test_matrix.csv', delimiter=',')
+    tst = np.array([tst,tst])
     print(tst.shape)
     print(tst)
-    adj = calc_adj(tst)
+    adj = calc_adj_batch(tst)
 
     print(adj)

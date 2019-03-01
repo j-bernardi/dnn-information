@@ -5,7 +5,7 @@ import numpy as np
 
 # Import the model
 from unet_models.unet_model2d import UNet2D
-from training_metadata import calc_loss, calc_adj, make_one_hot
+from training_metadata import calc_loss, make_one_hot
 
 import training_metadata as tm
 
@@ -80,9 +80,6 @@ def train(params, fake=False):
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
             #data['image'].float().to(params["device"]), data['classes'].to(params["device"])
 
-            #print("in", inputs.shape)
-            #print("labels", labels.shape)
-            
             optimizer.zero_grad()
 
             # adjust lr over iterations
@@ -99,13 +96,12 @@ def train(params, fake=False):
             # Get this batch's outputs - probabilities over 9 classes
             outputs = unet(inputs)
 
+            # Skip the actual training if desired [for testing]
             if fake:
                 return outputs.shape, outputs.numel()
 
-            #print("outputs", outputs.shape)
-
-            # calc loss
-            loss = calc_loss(outputs, labels, smoothing=params["label_smoothing"])
+            # Calc loss
+            loss = calc_loss(outputs, labels, smoothing_type=params["smoothing_type"], smoothing=params["label_smoothing"])
 
             # calc accuracy
             _, pred_classes = torch.max(outputs.data, 1, keepdim=True)
@@ -126,7 +122,13 @@ def train(params, fake=False):
 
             if i % (len(trainloader) // 5) == (len(trainloader) // 5) - 1:
                 print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 2000))
+                  (epoch + 1, i + 1, running_loss))
+                
+                if params["save_run"]:
+                    with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
+                        ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss))
+
+
                 running_loss = 0.0
 
         # Track losses per epoch
@@ -134,6 +136,10 @@ def train(params, fake=False):
         
         print('[Epoch %d complete] loss: %.3f, accuracy %.3f %%' %
               (epoch, epoch_loss, accuracy))
+        if params["save_run"]:
+            with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
+                ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss, accuracy))
+
         epoch_loss = 0.0
 
     return outputs.shape, outputs.numel()
@@ -154,17 +160,6 @@ def test(params, shape, numel, classes):
 
     total_el_per_batch = numel
     total_el_per_batched_class = total_el_per_batch // 9
-
-    print("total el per batch", total_el_per_batch)
-    print("total el per batched class", total_el_per_batched_class)
-
-    """
-    # the amount correct of each class
-    class_correct = torch.tensor([0] * len(classes), device=params["device"])
-    class_false_positive = torch.tensor([0] * len(classes), device=params["device"])
-    class_false_negative = torch.tensor([0] * len(classes), device=params["device"])
-    class_correct_not_labelled = torch.tensor([0] * len(classes), device=params["device"])
-    """
 
     # The sum of the confidences of prediction per class[0], test[1]
     confs = np.zeros((len(classes), len(testloader)))
@@ -200,9 +195,9 @@ def test(params, shape, numel, classes):
 
             max_conf_matrix, predicted = torch.max(outputs.data, 1, keepdim=True)
 
-            one_hot_predicted = make_one_hot(predicted).byte()
+            one_hot_predicted = make_one_hot(predicted, len(classes)).byte()
 
-            one_hot_labels = make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2))).byte()
+            one_hot_labels = make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), len(classes)).byte()
 
             # The confidences of predicted classes (0s elsewhere - sparse, one-hot rep)
             this_confs = torch.where(one_hot_predicted == 1, outputs, torch.tensor(0., device=params["device"]))
@@ -263,9 +258,9 @@ def test(params, shape, numel, classes):
 
     # calc overall accuracy TODO - check using correct totals
     overall_accuracy = 100. * (correct.sum().item() / total)
-    overall_false_positive = 100. * false_positive.sum() / total_all_classes
-    overall_false_negative = 100. *  false_negative.sum() / total_all_classes
-    overall_corr_not_label = 100. * correct_not_labelled.sum() / total_all_classes
+    overall_false_positive = false_positive.sum()
+    overall_false_negative = false_negative.sum()
+    overall_corr_not_label = correct_not_labelled.sum() # / total_all_classes
     
     # Calc average overall confidence
     average_confidences = []
@@ -283,9 +278,15 @@ def test(params, shape, numel, classes):
 
     print("\n*REPORT*\n")
     print("Trained on", len(testloader), "test images.")
-    print("Acc: %d%%, AvgConf: %d%% FPos: %d%%  FNeg: %d%% CorrUnlabel: %d%%\n" %\
+    print("Acc: %d%%, AvgConf: %d FPos: %d  FNeg: %d CorrUnlabel: %d\n" %\
         (overall_accuracy, average_confidence, overall_false_positive, 
             overall_false_negative, overall_corr_not_label))
+
+    if params["save_run"]:
+        with open(params["experiment_file"].replace(".txt", "TEST.txt"), 'a+') as ef:
+            ef.write("%.3f,%.3f,%d,%d,%d\n" % \
+                (overall_accuracy, average_confidence, overall_false_positive, 
+                 overall_false_negative, overall_corr_not_label))
     
     ## PRINT PER CLASS ## 
     # test t
@@ -294,9 +295,9 @@ def test(params, shape, numel, classes):
         # Try to get accuracy TODO - check using correct sums
         try:
             this_acc = 100*class_correct[c].item()/class_tots[c].item()
-            this_false_pos = 100*class_false_positive[c].item()/class_tots.sum().item()
-            this_false_neg = 100*class_false_negative[c].item()/class_tots.sum().item()
-            this_correct_not_label = 100*class_correct_not_labelled[c].item()/class_tots.sum().item()
+            this_false_pos = class_false_positive[c].item()
+            this_false_neg = class_false_negative[c].item()
+            this_correct_not_label = class_correct_not_labelled[c].item()#/class_tots.sum().item()
         except ZeroDivisionError:
             print("err")
             this_acc, this_false_pos, this_false_neg, this_correct_not_label = -1, -1, -1, -1
@@ -313,15 +314,24 @@ def test(params, shape, numel, classes):
         
         this_conf = 100 * sum(this_avgs) / len(this_avgs)        
         
-        print("%5s Acc: %d%% Conf: %.3f%% FPos: %d%% FNeg: %d%% CorrUnLab: %d%% on %d predicted labels (%d actual)." %\
+        print("%5s Acc: %d%% Conf: %.3f%% FPos: %d FNeg: %d CorrUnLab: %d on %d predicted labels (%d actual)." %\
             (classes[c], this_acc, this_conf, this_false_pos, 
                 this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
+
+        if params["save_run"]:
+            with open(params["experiment_file"].replace(".txt", "TEST.txt"), 'a+') as ef:
+                ef.write("CLASS%s,%.3f,%.3f,%d,%d,%d,%d,%d\n" % \
+                    (classes[c], this_acc, this_conf, this_false_pos, 
+                    this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
 
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
     
-    
+
+    if params["save_run"]:
+        params["experiment_file"] = tm.construct_file()
+
     ## LOAD DATA ##
     trainloader, testloader, classes = load_data(params)
 
@@ -329,6 +339,7 @@ if __name__ == "__main__":
     unet = load_model(params)
 
     ## TRAIN ##
+
     shape, numel = train(params, fake=False)
 
     print("Training complete")
@@ -339,6 +350,3 @@ if __name__ == "__main__":
     if params["save"]:
         print("\nSaving model to", params["save_location"])
         torch.save(unet.state_dict(), params["save_location"])
-    
-    
-    

@@ -71,3 +71,14 @@ def cal_loss_og(pred, gold, batch_size, smoothing):
         loss = F.cross_entropy(pred, gold, ignore_index=Constants.PAD, reduction='sum')
 
     return loss
+
+# OLD
+def make_one_hot_mine(tens, like):
+
+    #one_hot_labels = gold.view(-1, 1).type(torch.long) # OLD
+    #print("gold", gold.shape)
+    one_hot_labels = tens.type(torch.long)
+    #print("one hot labels", one_hot_labels.shape)
+    one_hot = torch.zeros_like(like).scatter(1, one_hot_labels, 1)
+    #print("one hot", one_hot.shape)
+    return one_hot
