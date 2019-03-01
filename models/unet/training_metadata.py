@@ -22,75 +22,6 @@ params = {
 }
 
 # TODO - transforms - handle the dataset...
- # OLD
-def cal_loss_depracated(pred, gold, smoothing=0, one_hot=True):
-    """
-    Calc CEL and apply label smoothing.
-    Came from:
-        https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/train.py
-    Inputs:
-        pred - b,C,X,Y,(Z) tensor of floats - indicating predicted class probabilities
-        gold - b,X,Y,(Z) tensor of integers indicating labelled class
-    """
-
-    gold = gold.long()
-
-    if one_hot:
-        
-        n_class = pred.size(1)
-
-        # Make predicted one-hot
-        print("pred", pred.shape)
-        one_hot_pred = make_one_hot(pred)
-
-        # Get classes of highest probability
-        _, pred_classes = torch.max(pred.data, 1, keepdim=True)
-
-        # Make labels one-hot
-        one_hot = make_one_hot(gold)
-
-        # applhy label smoothing
-        eps = smoothing
-
-        # TODO - use the good one hot funtion
-
-        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
-        log_prb = F.log_softmax(pred, dim=1)
-
-        non_pad_mask = gold.ne(0)
-        loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
-    else:
-        # loss from pred and gold, not one-hot
-        loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')
-
-    return loss
-
-## ORIGINAL
-def cal_loss_og(pred, gold, batch_size, smoothing):
-    ''' Calculate cross entropy loss, apply label smoothing if needed. '''
-
-    gold = gold.contiguous().view(-1)
-    print("gold shape", gold.shape)
-
-    if smoothing:
-        eps = 0.1
-        n_class = pred.size(1)
-
-        one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
-        
-        print(one_hot.shape)
-
-        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
-        log_prb = F.log_softmax(pred, dim=1)
-
-        non_pad_mask = gold.ne(Constants.PAD)
-        loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
-    else:
-        loss = F.cross_entropy(pred, gold, ignore_index=Constants.PAD, reduction='sum')
-
-    return loss
 
 def calc_loss(pred, gold, smoothing=0, one_hot=True):
     """
@@ -189,48 +120,6 @@ def calc_adj(class_tensor):
                 adj_matrix[c, a] += right_counts[a]
             if a in diag_counts:
                 adj_matrix[c, a] += diag_counts[a]
-
-    return adj_matrix
-
-def calc_adj_old(class_tensor):
-    """
-    Input: 
-        An (X x Y) matrix of n class integers.
-
-    Output:
-        A matrix of dimension nxn signalling adjacency.
-        DECIDE:
-            Weightings or true / false?
-            Maybe one function for each?
-    """
-
-    class_tensor = class_tensor.int()
-    
-    # For now 
-    assert len(class_tensor.shape) == 2
-
-    n = torch.max(class_tensor).item() + 1
-    print("Got", n, "classes.")
-
-    adj_matrix = torch.zeros((n, n))
-
-    ## check only the one to the right or below (sweep once)
-
-    ## TODO - make numpy
-    max_siz = (class_tensor.size(0) -1) * (class_tensor.size(1) -1)
-    for r in range(class_tensor.size(0) - 1):
-        for c in range(class_tensor.size(1) - 1):
-            if r*c % (max_siz // 100) == 0 and r*c != 0:
-                print(100 * r*c // max_siz, "%% of the way there")
-            this_class = class_tensor[r, c].item()
-
-            right_class = class_tensor[r, c+1].item()
-            down_class = class_tensor[r+1, c].item()
-            diag_class = class_tensor[r+1, c+1].item()
-
-            adj_matrix[this_class, right_class] += 1
-            adj_matrix[this_class, down_class] += 1
-            adj_matrix[this_class, diag_class] += 1
 
     return adj_matrix
 
