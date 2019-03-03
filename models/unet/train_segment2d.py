@@ -84,7 +84,7 @@ def train(unet, params, fake=False):
             inputs, labels, _ = data
 
             if params['information']:
-                info_tracker.on_batch_begin(i)
+                info_tracker.on_batch_begin({'inputs': inputs, 'labels': labels})
             
             # Set up input images and labels
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])

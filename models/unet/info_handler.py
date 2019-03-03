@@ -7,6 +7,8 @@ import torch, pickle
 import training_metadata as tm
 import numpy as np
 
+#import keras.backend as K
+
 class InfoHandler:
 
     def __init__(self, model, params, trn):
@@ -57,28 +59,36 @@ class InfoHandler:
 
                 self.layerweights.append(l.weight)
                 
-                # TODO - IMPLEMENT:
+                # TODO - IMPLEMENT in pytorch
                 self.layerfuncs.append(K.function(self.model.inputs, [l.output,])) # original
 
                 """
-                # Some explanation: 
+                # Some explanation of what K.function does: 
+                
                 final_conv_layer = get_output_layer(model, "conv5_3")
-                # E.g. taxes something of shape to model.layers[0] input (placeholder), returns the output of the final conv layer, and the prediction
+            
                 get_output = K.function([model.layers[0].input], [final_conv_layer.output, model.layers[-1].output])
+                # E.g. 
+                #   Takes input of shape model.layers[0] (placeholder)
+                #   Returns the output of the final conv layer, and the prediction
+                
                 [conv_outputs, predictions] = get_output([img])
                 """
-        
-        
-        # TODO - IMPLEMENT
 
+        # TODO - IMPLEMENT in pytorch (what are inputs, sample_weights, targets?)
         input_tensors = [self.model.inputs[0],
                          self.model.sample_weights[0],
                          self.model.targets[0],
-                         K.learning_phase()]
+                         K.learning_phase()] ## 0 or 1 (false, true)
+        
+        # TODO - implement in pytorch
         # Get gradients of all the relevant layers at once
         grads = self.model.optimizer.get_gradients(self.model.total_loss, self.layerweights)
+        
+        # TODO - implement in pytorch
         self.get_gradients = K.function(inputs=input_tensors, outputs=grads)
         
+        # TODO - implement in pytorch
         # Get cross-entropy loss
         self.get_loss = K.function(inputs=input_tensors, outputs=[self.model.total_loss,])
             
@@ -110,7 +120,7 @@ class InfoHandler:
             return
         
         # Sample a batch
-        batchsize = self.params['batch_size']
+        batchsize = batch['inputs'].size(0)
         cur_ixs = self._batch_todo_ixs[:batchsize]
         
         # Advance the indexing, so next on_batch_begin samples a different batch
@@ -118,11 +128,10 @@ class InfoHandler:
         
         # Get gradients for this batch
 
-        
-        # ORIGINAL
-        inputs = [self.trn['X'][cur_ixs,:],  # Inputs
+        # ORIGINAL (TODO - fix functional and self.get_gradients would be implemented)
+        inputs = [batch['inputs'],  # Inputs
                   [1,]*len(cur_ixs),      # Uniform sample weights
-                  self.trn['Y'][cur_ixs,:],  # Outputs
+                  batch['labels'],  # Outputs
                   1                       # Training phase
                  ]
         for lndx, g in enumerate(self.get_gradients(inputs)):
@@ -187,10 +196,11 @@ class InfoHandler:
             data['gradmean'    ].append( np.linalg.norm(stackedgrads.mean(axis=1)) )
             data['gradstd'     ].append( np.linalg.norm(stackedgrads.std(axis=1)) )
 
-            # ORIGINAL:
-            # data['activity_tst'].append(self.layerfuncs[lndx]([self.tst.X,])[0])
+            # ORIGINAL (changed X format) - TODO: fix layerfuncs
+            data['activity_tst'].append(self.layerfuncs[lndx]([self.tst['X'],])[0])
 
-            ## ATTEMPT TO REPLACE ##
+            """
+            ## ATTEMPT TO REPLACE ORIGINAL ##
             
             # TODO - just calculate the activation here - the functions don't work
             self.model.layers[layerix].register_forward_hook(get_activation(layerix))
@@ -204,7 +214,8 @@ class InfoHandler:
             data['activity_tst'].append(self.layerfuncs[layerix]) 
 
             ########################
-            
+            """
+
         fname = self.save_to_dir + "epoch%08d" % epoch
         print("Saving", fname)
         with open(fname, 'wb') as f:
