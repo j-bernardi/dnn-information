@@ -21,7 +21,9 @@ params = {
     "save_location": "models/unet/saved_models",
     "scan_location": "data/input_tensors/segmentation_data/datasets/",
     "save_run": True,
-    "save_to_dir": "data/training_data/"
+    "save_to_dir": "data/training_data/",
+    "information": True,
+    'FULL_MI': False
 }
 
 # TODO - transforms - handle the dataset...

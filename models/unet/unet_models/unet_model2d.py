@@ -34,52 +34,79 @@ class UNet2D(nn.Module):
 
         super(UNet2D, self).__init__()
 
+        list_of_layers = []
+
         ## ENCODING ##
 
-        # Level 1
         # QUESTION: this to get 32 channels in layer 1?
         self.ec1 = self.encoder(1, 64)
+        list_of_layers.extend(list(self.ec1.children()))
         self.down12 = Interpolate(max_pool=True)
+        list_of_layers.extend(list(self.down12.children()))
         
         self.ec2 = self.encoder(64, 128)
+        list_of_layers.extend(list(self.ec2.children()))
         self.down23 = Interpolate(max_pool=True)
+        list_of_layers.extend(list(self.down23.children()))
         
         self.ec3 = self.encoder(128, 256)
+        list_of_layers.extend(list(self.ec3.children()))
         self.down34 = Interpolate(max_pool=True)
+        list_of_layers.extend(list(self.down34.children()))
         
         self.ec4 = self.encoder(256, 512)
+        list_of_layers.extend(list(self.ec4.children()))
         self.down45 = Interpolate(max_pool=True)
+        list_of_layers.extend(list(self.down45.children()))
         
+        ## DECODING ##
+
         # TODO - consider fc here to compensate for 9 classes (not 2)
+        
         self.ec5 = self.encoder(512, 1024)
+        list_of_layers.extend(list(self.ec5.children()))
         self.up54 = self.decoder(1024, 512)
+        list_of_layers.extend(list(self.up54.children()))
         
         self.dc4 = self.encoder(1024, 512)
+        list_of_layers.extend(list(self.dc4.children()))
         self.up43 = self.decoder(512, 256)
+        list_of_layers.extend(list(self.up43.children()))
         
         self.dc3 = self.encoder(512, 256)
+        list_of_layers.extend(list(self.dc3.children()))
         self.up32 = self.decoder(256, 128)
+        list_of_layers.extend(list(self.up32.children()))
         
         self.dc2 = self.encoder(256, 128)
+        list_of_layers.extend(list(self.dc2.children()))
         self.up21 = self.decoder(128, 64)
+        list_of_layers.extend(list(self.up21.children()))
         
         self.dc1 = self.encoder(128, 64)
+        list_of_layers.extend(list(self.dc1.children()))
 
-        self.final_step = nn.Conv2d(64, n_classes, kernel_size=1, padding=0)
+        self.final_step = nn.Sequential(
+            nn.Conv2d(64, self.n_classes, kernel_size=1, padding=0),
+            nn.BatchNorm2d(self.n_classes)
+        )
+        list_of_layers.extend(list(self.final_step.children()))
 
-        #Interpolate(size=size, mode='bilinear') 
-        
+        # Combine into one sequential item for info
+        self.layers = nn.Sequential(*list_of_layers)
+    
     def forward(self, x):
         """
         Define the forward pass of the network
-        See supp figure 14 here:
-        https://static-content.springer.com/esm/art%3A10.1038%2Fs41591-018-0107-6/MediaObjects/41591_2018_107_MOESM1_ESM.pdf
+        https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/
         """
+
         ## UPSAMPLE ##
+        
         # TEMP - later, consider just making sure downsample always even
         # Not needed if padding=1
         #x = F.interpolate(x, size=(572, 572))
-
+        
         ## DOWN ##
 
         # L1
@@ -154,7 +181,7 @@ class UNet2D(nn.Module):
         out = self.final_step(d12)
 
         return out
-
+        
     def crop_to(self, big, small):
         """Crops 4d tensor x to size of tensor y in last 2 dimensions."""
 

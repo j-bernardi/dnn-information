@@ -3,11 +3,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 
+import training_metadata as tm
+import info_handler as info
+
 # Import the model
 from unet_models.unet_model2d import UNet2D
-from training_metadata import calc_loss, make_one_hot
-
-import training_metadata as tm
 
 params = tm.params 
 
@@ -50,13 +50,17 @@ def load_model(params):
 
     return unet
 
-def train(params, fake=False):
+def train(unet, params, fake=False):
     """Perform training."""
 
     # Learning rate and time to change #
     idxs = np.floor(params["epochs"] * len(trainloader) * params["lr_idxs_array"]).astype(int)
     lrs = params["lr_0"] * params["lr_array"]
     next_idx = 0
+
+    if params['information']:
+        info_tracker = info.InfoHandler(unet, params, {'X':trainloader,'Y':testloader})
+        info_tracker.on_train_begin()
 
     # Adam optimizer - https://arxiv.org/abs/1412.6980 #
     optimizer = optim.Adam(unet.parameters(), lr=params["lr_0"])
@@ -70,11 +74,17 @@ def train(params, fake=False):
         epoch_loss = 0.0
         total_el = 0
         total_num = 0
+
+        if params['information']:
+            info_tracker.on_epoch_begin(epoch)
         
         for i, data in enumerate(trainloader, 0):
 
             # inputs, labels, set?? TODO - check 3rd 
             inputs, labels, _ = data
+
+            if params['information']:
+                info_tracker.on_batch_begin(i)
             
             # Set up input images and labels
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
@@ -101,7 +111,7 @@ def train(params, fake=False):
                 return outputs.shape, outputs.numel()
 
             # Calc loss
-            loss = calc_loss(outputs, labels, smoothing_type=params["smoothing_type"], smoothing=params["label_smoothing"])
+            loss = tm.calc_loss(outputs, labels, smoothing_type=params["smoothing_type"], smoothing=params["label_smoothing"])
 
             # calc accuracy
             _, pred_classes = torch.max(outputs.data, 1, keepdim=True)
@@ -128,23 +138,34 @@ def train(params, fake=False):
                     with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
                         ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss))
 
-
                 running_loss = 0.0
 
-        # Track losses per epoch
+        ## EPOCH COMPLETE ##
+
+        if params['information']:
+            info_tracker.on_epoch_end()
+
+        ## Track losses / accuracy per epoch ##
         accuracy = 100*correct/total_el
         
+        # Print
         print('[Epoch %d complete] loss: %.3f, accuracy %.3f %%' %
               (epoch, epoch_loss, accuracy))
+        
+        # Save to file
         if params["save_run"]:
             with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
                 ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss, accuracy))
 
         epoch_loss = 0.0
 
+        ## Print info of this epoch ##
+
+        print("layer weight", unet.ec1.weight.shape)
+
     return outputs.shape, outputs.numel()
 
-def test(params, shape, numel, classes):
+def test(unet, params, shape, numel, classes):
     """Test the network."""
 
     print("Testing")
@@ -195,9 +216,9 @@ def test(params, shape, numel, classes):
 
             max_conf_matrix, predicted = torch.max(outputs.data, 1, keepdim=True)
 
-            one_hot_predicted = make_one_hot(predicted, len(classes)).byte()
+            one_hot_predicted = tm.make_one_hot(predicted, len(classes)).byte()
 
-            one_hot_labels = make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), len(classes)).byte()
+            one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), len(classes)).byte()
 
             # The confidences of predicted classes (0s elsewhere - sparse, one-hot rep)
             this_confs = torch.where(one_hot_predicted == 1, outputs, torch.tensor(0., device=params["device"]))
@@ -338,14 +359,16 @@ if __name__ == "__main__":
     # LOAD MODEL #
     unet = load_model(params)
 
+    print(unet.layers)
+
     ## TRAIN ##
 
-    shape, numel = train(params, fake=False)
+    shape, numel = train(unet, params, fake=False)
 
     print("Training complete")
-    
+    sys.exit()
     ## TEST ##
-    test(params, shape, numel, classes)
+    test(unet, params, shape, numel, classes)
 
     if params["save"]:
         print("\nSaving model to", params["save_location"])
