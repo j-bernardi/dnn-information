@@ -8,6 +8,7 @@ https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py
 """
 
 import torch, gc
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -23,6 +24,13 @@ class UNet2D(nn.Module):
             Output: estimated probability over the 15 (default) classes
                 (for each of the 448x512x1 output voxels)
         """
+        def update(mod, num_layers, append=False):
+            """Updates the number of layers and returns the number """
+            if append:
+                self.info_layers_numbers.append(num_layers)
+            return len(list(mod.children()))
+
+        super(UNet2D, self).__init__()
 
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -32,68 +40,87 @@ class UNet2D(nn.Module):
         else: 
             self.device = torch.device(device)
 
-        super(UNet2D, self).__init__()
+        # The reps per epoch
+        self.representations_per_epochs = []
+        # A list holding all the reps from this epoch
+        self.current_representations = None
+        # The indices of the layers to calculate info for (e.g. the convs)
+        self.info_layers_numbers = []
 
-        list_of_layers = []
+        ## Define the model ##
+
+        num_layers = 0
 
         ## ENCODING ##
 
         # QUESTION: this to get 32 channels in layer 1?
         self.ec1 = self.encoder(1, 64)
-        list_of_layers.extend(list(self.ec1.children()))
+        num_layers += update(self.ec1, num_layers, append=True)
         self.down12 = Interpolate(max_pool=True)
-        list_of_layers.extend(list(self.down12.children()))
+        num_layers += update(self.down12, num_layers)
         
+        # l2
         self.ec2 = self.encoder(64, 128)
-        list_of_layers.extend(list(self.ec2.children()))
+        num_layers += update(self.ec2, num_layers, append=True)
         self.down23 = Interpolate(max_pool=True)
-        list_of_layers.extend(list(self.down23.children()))
+        num_layers += update(self.down23, num_layers)
         
+        # l3
         self.ec3 = self.encoder(128, 256)
-        list_of_layers.extend(list(self.ec3.children()))
+        num_layers += update(self.ec3, num_layers, append=True)
         self.down34 = Interpolate(max_pool=True)
-        list_of_layers.extend(list(self.down34.children()))
+        num_layers += update(self.down34, num_layers)
         
         self.ec4 = self.encoder(256, 512)
-        list_of_layers.extend(list(self.ec4.children()))
+        num_layers += update(self.ec4, num_layers, append=True)
         self.down45 = Interpolate(max_pool=True)
-        list_of_layers.extend(list(self.down45.children()))
+        num_layers += update(self.down45, num_layers)
         
         ## DECODING ##
 
         # TODO - consider fc here to compensate for 9 classes (not 2)
         
         self.ec5 = self.encoder(512, 1024)
-        list_of_layers.extend(list(self.ec5.children()))
+        num_layers += update(self.ec5, num_layers, append=True)
         self.up54 = self.decoder(1024, 512)
-        list_of_layers.extend(list(self.up54.children()))
+        num_layers += update(self.up54, num_layers)
         
         self.dc4 = self.encoder(1024, 512)
-        list_of_layers.extend(list(self.dc4.children()))
+        num_layers += update(self.dc4, num_layers, append=True)
         self.up43 = self.decoder(512, 256)
-        list_of_layers.extend(list(self.up43.children()))
+        num_layers += update(self.up43, num_layers)
         
         self.dc3 = self.encoder(512, 256)
-        list_of_layers.extend(list(self.dc3.children()))
+        num_layers += update(self.dc3, num_layers, append=True)
         self.up32 = self.decoder(256, 128)
-        list_of_layers.extend(list(self.up32.children()))
+        num_layers += update(self.up32, num_layers)
         
         self.dc2 = self.encoder(256, 128)
-        list_of_layers.extend(list(self.dc2.children()))
+        num_layers += update(self.dc2, num_layers, append=True)
         self.up21 = self.decoder(128, 64)
-        list_of_layers.extend(list(self.up21.children()))
+        num_layers += update(self.up21, num_layers)
         
         self.dc1 = self.encoder(128, 64)
-        list_of_layers.extend(list(self.dc1.children()))
+        num_layers += update(self.dc1, num_layers, append=True)
 
+        ### TODO - check no activation required ###
         self.final_step = nn.Sequential(
             nn.Conv2d(64, self.n_classes, kernel_size=1, padding=0),
             nn.BatchNorm2d(self.n_classes)
         )
-        list_of_layers.extend(list(self.final_step.children()))
 
-        # Combine into one sequential item for info
-        self.layers = nn.Sequential(*list_of_layers)
+        ## Create the list ###
+        num_layers += update(self.final_step, num_layers, append=True)
+        
+        
+        # Check tracking correct layers
+        print("Info layers numbers", self.info_layers_numbers)
+        """
+        for i in range(num_layers):
+            print(i)
+            if i in  self.info_layers_numbers:
+                print("*** TRACKING INFO ***")
+        """
     
     def forward(self, x):
         """
@@ -110,33 +137,32 @@ class UNet2D(nn.Module):
         ## DOWN ##
 
         # L1
-        #print("x", x.shape)
         syn1 = self.ec1(x)
-        #print("s1", syn1.shape)
+        self.add_info(0, syn1.detach().cpu().numpy())
         del x
 
         # L2
         e2 = self.down12(syn1)
-        #print("e2", e2.shape)
         syn2 = self.ec2(e2)
-        #print("s2", syn2.shape)
+        self.add_info(1, syn2.detach().cpu().numpy())
         del e2
 
         # L3
         e3 = self.down23(syn2)
-        #print("e3", e3.shape)
         syn3 = self.ec3(e3)
-        #print("syn3", syn3.shape)
+        self.add_info(2, syn3.detach().cpu().numpy())
         del e3
 
         # L4
         e4 = self.down34(syn3)
-        syn4 = self.ec4(e4) 
+        syn4 = self.ec4(e4)
+        self.add_info(3, syn4.detach().cpu().numpy())
         del e4
 
         # L5
         e51 = self.down45(syn4)
         e52 = self.ec5(e51)
+        self.add_info(4, e52.detach().cpu().numpy())
         del e51
 
         ## UPWARD ##
@@ -147,6 +173,7 @@ class UNet2D(nn.Module):
         del syn4, e52
         
         d42 = self.dc4(d41)
+        self.add_info(5, d42.detach().cpu().numpy())
         del d41
 
         # L3
@@ -159,6 +186,7 @@ class UNet2D(nn.Module):
         del syn3, d42
         
         d32 = self.dc3(d31)
+        self.add_info(6, d32.detach().cpu().numpy())
         del d31
 
         # L2
@@ -168,6 +196,7 @@ class UNet2D(nn.Module):
         del syn2, d32
 
         d22 = self.dc2(d21)
+        self.add_info(7, d22.detach().cpu().numpy())
         del d21
 
         # L1
@@ -176,9 +205,11 @@ class UNet2D(nn.Module):
             (up, self.crop_to(syn1, up)), dim=1)
         del syn1, d22
         d12 = self.dc1(d11)
+        self.add_info(8, d12.detach().cpu().numpy())
         del d11
         
         out = self.final_step(d12)
+        self.add_info(9, out.detach().cpu().numpy())
 
         return out
         
@@ -227,6 +258,36 @@ class UNet2D(nn.Module):
             return Interpolate(max_pool=False, scale_factor=2, mode='bilinear', align_corners=True)
         else:
             return nn.ConvTranspose2d(in_channels, out_channels, 2, stride=2)
+
+    def next_epoch(self):
+        """Appends the current reps to the epoch reps, resets."""
+
+        # Save the epoch - list of representations in this epoch per layer being saved
+        self.representations_per_epochs.append(self.current_representations)
+
+        # Empty out current reps
+        self.reset() 
+
+    def add_info(self, layer_index, representations):
+        """Add this layer output for the info analysis."""
+
+        # List holding all the representations of the epoch, per level
+        if self.current_representations[layer_index] is None:
+            self.current_representations[layer_index] = representations
+
+        else:
+
+            # To concatenate
+            assert self.current_representations[layer_index].shape[1:] == representations.shape[1:]
+            
+            self.current_representations[layer_index] = np.concatenate([self.current_representations[layer_index],
+                                                                   representations], axis=0)
+            
+            #print("result", self.current_representations[layer_index].shape)
+
+    def reset(self):
+        """Resets the current [epoch] representations."""
+        self.current_representations = [None for _ in range(len(self.info_layers_numbers))]
 
 class Interpolate(nn.Module):
     """Interpolates up or down through various means."""

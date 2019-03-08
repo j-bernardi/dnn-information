@@ -6,8 +6,10 @@ import numpy as np
 # other location "data/input_tensors/sample_scans/"
 # TEMP batch_size = 8
 # TEMP epochs = 160000 // 88
+# TEMP every_n was 10
+# TEMP num_of_bins was 40
 params = {
-    "epochs" : 1,
+    "epochs" : 2,
     "lr_0" : 0.0001,
     "batch_size" : 1,
     "workers" : 4,
@@ -23,7 +25,8 @@ params = {
     "save_run": True,
     "save_to_dir": "data/training_data/",
     "information": True,
-    'FULL_MI': False
+    "every_n": 1,
+    "num_of_bins": 10
 }
 
 # TODO - transforms - handle the dataset...
@@ -252,7 +255,7 @@ def make_one_hot(tens, C=9):
     Parameters
     ----------
     labels : torch.autograd.Variable of torch.cuda.LongTensor
-        N x C x (D) x H x W, where N is batch size, depth optional. 
+        N x 1 x (D) x H x W, where N is batch size, depth optional. 
         Each value is an integer representing correct classification.
     C : integer. 
         number of classes in labels.
@@ -262,6 +265,10 @@ def make_one_hot(tens, C=9):
     target : torch.autograd.Variable of torch.cuda.FloatTensor
         N x C x D x H x W, where C is class number. One-hot encoded.
     '''
+    
+    # Clean input
+    tens = torch.tensor(tens, device=params["device"], dtype=torch.long)
+
     if len(tens.shape) == 5:
         one_hot = torch.cuda.FloatTensor(tens.size(0), C, tens.size(2), tens.size(3), tens.size(4)).zero_()
     elif len(tens.shape) == 4:
@@ -279,6 +286,39 @@ def make_one_hot(tens, C=9):
         
     return target
 
+def get_aligned_representations(representations, order):
+
+    #print("reps", len(representations))
+    #print(order)
+
+    for epoch in range(len(representations)):
+        
+        #print("epoch", epoch)
+        #print("order", order[epoch])
+
+        for layer in range(len(representations[0])):
+
+            #print("layer", layer)
+            #print("\tbefore", representations[epoch][layer].shape)
+            
+            # TODO - check logic here
+            """
+            if len(representations[epoch][layer].shape) == 4:
+                representations[epoch][layer][order[epoch], :, :, :] = representations[epoch][layer][:,:,:,:]
+            
+            elif len(representations[epoch][layer].shape) == 5:
+                representations[epoch][layer][order[epoch], :, :, :, :] = representations[epoch][layer][:,:,:,:,:]
+            else:
+                raise NotImplementedError("Expected len of reps[epoch][layer] = 5, got %s" \
+                    % str(len(representations[epoch][layer])))
+            """
+
+            representations[epoch][layer] = representations[epoch][layer][np.argsort(order[epoch]), :]
+            #print("\tafter", representations[epoch][layer].shape)
+
+    # [epochs, hidden-layers, reps(b,c,x,y)]
+    return representations
+
 if __name__ == "__main__":
 
     """
@@ -293,7 +333,7 @@ if __name__ == "__main__":
     """
 
     tst = np.genfromtxt('data/tests/test_matrix.csv', delimiter=',')
-    tst = np.array([tst,tst])
+    tst = np.array([tst, tst])
     print(tst.shape)
     print(tst)
     adj = calc_adj_batch(tst)

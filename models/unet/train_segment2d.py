@@ -1,10 +1,10 @@
-import torch, torchvision, os, sys, time
+import torch, torchvision, os, sys, time, importlib
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 
 import training_metadata as tm
-import info_handler as info
+import plot_information, information_process
 
 # Import the model
 from unet_models.unet_model2d import UNet2D
@@ -16,7 +16,7 @@ params["save"] = True
 params["save_location"] += "/unet2d.pth"
 
 # limit number for testing
-number_samples = 10 # 0 for all
+number_samples = 3#10 # 0 for all
 
 # TODO - transforms - handle the dataset...
 
@@ -50,42 +50,47 @@ def load_model(params):
 
     return unet
 
-def train(unet, params, fake=False):
+def train(unet, trainloader, params, fake=False):
     """Perform training."""
+
+    loss_list = []
+    # loss and accuracy per epoch
+    epoch_mean_loss = []
+    accuracy_mean_val = []
+    # retains the order of original training images
+    train_shuffles = []
 
     # Learning rate and time to change #
     idxs = np.floor(params["epochs"] * len(trainloader) * params["lr_idxs_array"]).astype(int)
     lrs = params["lr_0"] * params["lr_array"]
     next_idx = 0
 
-    if params['information']:
-        info_tracker = info.InfoHandler(unet, params, {'X':trainloader,'Y':testloader})
-        info_tracker.on_train_begin()
-
     # Adam optimizer - https://arxiv.org/abs/1412.6980 #
     optimizer = optim.Adam(unet.parameters(), lr=params["lr_0"])
+
+    unet.reset()
 
     print("Starting training.")
     
     # epochs #
     for epoch in range(params["epochs"]):
-        
+
         running_loss, correct = 0.0, 0.0
         epoch_loss = 0.0
         total_el = 0
         total_num = 0
+        this_num = 0
+        train_shuffles.append([])
 
-        if params['information']:
-            info_tracker.on_epoch_begin(epoch)
+        unet.reset()
         
         for i, data in enumerate(trainloader, 0):
 
             # inputs, labels, set?? TODO - check 3rd 
-            inputs, labels, _ = data
+            inputs, labels, weight, original_index = data
 
-            if params['information']:
-                info_tracker.on_batch_begin({'inputs': inputs, 'labels': labels})
-            
+            train_shuffles[epoch].append(original_index.item())
+
             # Set up input images and labels
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
             #data['image'].float().to(params["device"]), data['classes'].to(params["device"])
@@ -120,6 +125,7 @@ def train(unet, params, fake=False):
             correct += torch.eq(pred_classes, shaped_labels.long()).float().sum()
             total_el += outputs.numel()
             total_num += outputs.size(0)
+            this_num += outputs.size(0)
 
             loss.backward()
             optimizer.step()
@@ -130,27 +136,31 @@ def train(unet, params, fake=False):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            if i % (len(trainloader) // 5) == (len(trainloader) // 5) - 1:
+            # TEMP
+            if True:
+            #if i % (len(trainloader) // 5) == (len(trainloader) // 5) - 1:
                 print('[%d, %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss))
                 
                 if params["save_run"]:
                     with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
-                        ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss))
+                        ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss / this_num))
 
                 running_loss = 0.0
+                this_num = 0
 
         ## EPOCH COMPLETE ##
-
-        if params['information']:
-            info_tracker.on_epoch_end()
+        unet.next_epoch()
 
         ## Track losses / accuracy per epoch ##
         accuracy = 100*correct/total_el
-        
+
+        epoch_mean_loss.append(epoch_loss / total_num)
+        accuracy_mean_val.append(accuracy)
+
         # Print
-        print('[Epoch %d complete] loss: %.3f, accuracy %.3f %%' %
-              (epoch, epoch_loss, accuracy))
+        print('[Epoch %d complete] mean loss: %.3f, accuracy %.3f %%' %
+              (epoch + 1, epoch_loss / total_num, accuracy))
         
         # Save to file
         if params["save_run"]:
@@ -159,13 +169,70 @@ def train(unet, params, fake=False):
 
         epoch_loss = 0.0
 
-        ## Print info of this epoch ##
+    return outputs.shape, outputs.numel(), epoch_mean_loss, accuracy_mean_val, train_shuffles
 
-        print("layer weight", unet.ec1.weight.shape)
+def do_info(unet, training_order, trainloader, params):
+    """Do the information analysis."""
 
-    return outputs.shape, outputs.numel()
+    ws = tm.get_aligned_representations(unet.representations_per_epochs, training_order)
 
-def test(unet, params, shape, numel, classes):
+    # TODO - have unet store the order in which the training data came, too (e.g. X_train)
+    X_train, y_one_hot = get_original_order(trainloader)
+    
+    IXT_array, ITY_array = information_process.get_information(ws, X_train, y_one_hot, 
+                                                               params["num_of_bins"], every_n=params["every_n"], return_matrices=True)
+
+    return IXT_array, ITY_array
+
+def get_original_order(trainloader):
+
+    ## TEMP HACK ##
+    len_tl = 0
+    ## TODO - find X_train, y_train from trainloader
+    
+    print("Creating X_train")
+    """
+    for i, _ in enumerate(trainloader):
+        len_tl += 1
+    """ 
+    X_train = None #np.array([None for _ in range(len_tl)])
+    y_train = None #np.array([None for _ in range(len_tl)])
+
+    # A list of the order in which X_train appears in terms of original index
+    # E.g. [2, 1, 3, 0] means shuffle order was as such
+    og_idxs = []
+
+    for _, data in enumerate(trainloader):
+        # for item in the trainingset
+        x = data[0].cpu().numpy() # X data
+        #print("expecting data to be in batches")
+        #print(x.shape)
+        y = data[1].cpu().numpy() # y data
+        #print("idxs of batch")
+        #print(data[-1].cpu().numpy().tolist())
+        og_idxs += data[-1].cpu().numpy().tolist()
+
+        if X_train is None:
+            X_train = x
+            y_train = y
+        else:
+            X_train = np.concatenate((X_train, x))
+            y_train = np.concatenate((y_train, y))
+
+    # reorder them
+    # idx lines up with order of X, so X[0] is at idx.index(0))
+    # X[i] = X[idx[i]]
+    X_train[:] = X_train[np.array(og_idxs)[:]]
+    y_train[:] = y_train[np.array(og_idxs)[:]]
+
+    y_train = np.expand_dims(y_train, axis=1)
+
+    # y_one_hot = np.concatenate([y_train, 1 - y_train], axis=1) - WAS making it one hot for binary data
+    y_one_hot = tm.make_one_hot(y_train).cpu().numpy()
+
+    return X_train, y_one_hot
+
+def test(unet, testloader, params, shape, numel, classes):
     """Test the network."""
 
     print("Testing")
@@ -359,16 +426,39 @@ if __name__ == "__main__":
     # LOAD MODEL #
     unet = load_model(params)
 
-    print(unet.layers)
-
     ## TRAIN ##
+    shape, numel, epoch_mean_loss, accuracy_mean_val, training_order = train(unet, trainloader, params, fake=False)
 
-    shape, numel = train(unet, params, fake=False)
+    if params["save"]:
+        print("\nSaving model to", params["save_location"].replace("/unet2d.pth", "/unet2d_TRAINED.pth"))
+        torch.save(unet.state_dict(), params["save_location"].replace("/unet2d.pth", "/unet2d_TRAINED.pth"))
 
     print("Training complete")
+
+    # can plot epoch_mean_loss on epoch for loss change:
+    # plt.plot(np.arange(len(epoch_mean_loss)), epoch_mean_loss)
+    
+    # Plot the accuracy on epoch of the validation set
+    # plt.plot(np.arange(len(accuracy_mean_val)), accuracy_mean_val)
+
+    ## INFO ANALYSIS ##
+    if params["information"]:
+
+        IXT_array, ITY_array = do_info(unet, training_order, trainloader, params)
+
+        print("IXT shape", IXT_array.shape)
+        print(IXT_array)
+
+        print("ITY shape", ITY_array.shape)
+        print(ITY_array)
+
+        importlib.reload(plot_information)
+
+        plot_information.plot_information_plane(IXT_array, ITY_array, num_epochs=params["epochs"], every_n=params["every_n"])
+
     sys.exit()
     ## TEST ##
-    test(unet, params, shape, numel, classes)
+    test(unet, testloader, params, shape, numel, classes)
 
     if params["save"]:
         print("\nSaving model to", params["save_location"])

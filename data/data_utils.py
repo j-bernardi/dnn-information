@@ -27,7 +27,7 @@ class ImdbData(data.Dataset):
         label = torch.from_numpy(label)
         weight = torch.from_numpy(weight)
         
-        return img, label, weight
+        return img, label, weight, index
 
     def __len__(self):
         return len(self.y)

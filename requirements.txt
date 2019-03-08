@@ -4,4 +4,4 @@ numpy
 scipy
 scikit-image
 matplotlib
-pickle
+joblib
