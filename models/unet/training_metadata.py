@@ -194,16 +194,39 @@ def calc_adj(class_tensor):
         A matrix of dimension nxn 
             signalling adjacency of class: row to class: col
     """
-    def reduce(tens, axis):
-        """Reduces 2d tensor in 0 and 1 dims by 1."""
+    def reduce(tens, axis, by):
+        """
+        Reduces 2d tensor in 0 and 1 dims.
+        
+        Integer by - decides 
+            n from end if by = +n
+            n from start if by = -n
+        """
         if axis == 0:
-            return tens[:tens.shape[0]-1, :tens.shape[1]]
+            # up / down axis
+            if by > 0:
+                # drop the final row
+                return tens[:tens.shape[0]-by, :tens.shape[1]]
+            elif by < 0:
+                return tens[(-by):tens.shape[0], :tens.shape[1]]
+            else:
+                return tens
         elif axis == 1:
-            return tens[:tens.shape[0], :tens.shape[1]-1]
+            if by > 0:
+                return tens[:tens.shape[0], :tens.shape[1]-by]
+            elif by < 0:
+                return tens[:tens.shape[0], (-by):tens.shape[1]]
+            else:
+                return tens
         elif axis == (0,1):
-            return tens[:tens.shape[0]-1, :tens.shape[1]-1]
+            if by > 0:
+                return tens[:tens.shape[0]-by, :tens.shape[1]-by]
+            elif by < 0:
+                return tens[(-by):tens.shape[0], (-by):tens.shape[1]]
+            else:
+                return tens
         else:
-            raise NotImplementedError
+            raise NotImplementedError("Not implemented for axis %s" % str(axis))
 
     if len(class_tensor.shape) != 2:
         raise NotImplementedError
@@ -214,15 +237,23 @@ def calc_adj(class_tensor):
     # Init
     adj_matrix = np.zeros((n, n))
 
-    # A matrix of the classes under, right, diag of corresponding class
-    class_under = reduce(np.roll(class_tensor, -1, axis=0), axis=0)
-    class_right = reduce(np.roll(class_tensor, -1, axis=1), axis=1)
-    class_diag = reduce(np.roll(class_tensor, (-1,-1), axis=(0,1)), axis=(0,1))
+    # A matrix of the classes under, over, right, left, of corresponding class
+    class_under = reduce(np.roll(class_tensor, -1, axis=0), axis=0, by=1)
+    class_up = reduce(np.roll(class_tensor, 1, axis=0), axis=0, by=-1)
+
+    class_right = reduce(np.roll(class_tensor, -1, axis=1), axis=1, by=1)
+    class_left = reduce(np.roll(class_tensor, 1, axis=1), axis=1, by=-1)
+    
+    # class_diag_br = reduce(np.roll(class_tensor, (-1,-1), axis=(0,1)), axis=(0,1))
 
     # Reduce as don't count adjacency to under/right final row/col
-    reduced_class_tensor_under = reduce(class_tensor, axis=0)
-    reduced_class_tensor_right = reduce(class_tensor, axis=1)
-    reduced_class_tensor_diag = reduce(class_tensor, axis=(0,1))
+    reduced_class_tensor_under = reduce(class_tensor, axis=0, by=1)
+    reduced_class_tensor_up = reduce(class_tensor, axis=0, by=-1)
+    
+    reduced_class_tensor_right = reduce(class_tensor, axis=1, by=1)
+    reduced_class_tensor_left = reduce(class_tensor, axis=1, by=-1)
+    
+    #reduced_class_tensor_diag = reduce(class_tensor, axis=(0,1))
 
     # For each class in the class tensor
     for c in range(n):
@@ -231,20 +262,30 @@ def calc_adj(class_tensor):
         under_unique, under_counts = np.unique(np.where(reduced_class_tensor_under==c, class_under, -1), return_counts=True)
         under_counts = dict(zip(under_unique, under_counts))
 
+        up_unique, up_counts = np.unique(np.where(reduced_class_tensor_up==c, class_up, -1), return_counts=True)
+        up_counts = dict(zip(up_unique, up_counts))
+
         right_unique, right_counts = np.unique(np.where(reduced_class_tensor_right==c, class_right, -1), return_counts=True)
         right_counts = dict(zip(right_unique, right_counts))
+
+        left_unique, left_counts = np.unique(np.where(reduced_class_tensor_left==c, class_left, -1), return_counts=True)
+        left_counts = dict(zip(left_unique, left_counts))
         
-        diag_unique, diag_counts = np.unique(np.where(reduced_class_tensor_diag==c, class_diag, -1), return_counts=True)
-        diag_counts = dict(zip(diag_unique, diag_counts))
+        #diag_unique, diag_counts = np.unique(np.where(reduced_class_tensor_diag==c, class_diag, -1), return_counts=True)
+        #diag_counts = dict(zip(diag_unique, diag_counts))
         
         # Count occurences per class 
         for a in range(n):
             if a in under_counts:
                 adj_matrix[c, a] += under_counts[a]
+            if a in up_counts:
+                adj_matrix[c,a] += up_counts[a]
             if a in right_counts:
                 adj_matrix[c, a] += right_counts[a]
-            if a in diag_counts:
-                adj_matrix[c, a] += diag_counts[a]
+            if a in left_counts:
+                adj_matrix[c,a] += left_counts[a]
+            #if a in diag_counts:
+            #    adj_matrix[c, a] += diag_counts[a]
 
     return adj_matrix
 
