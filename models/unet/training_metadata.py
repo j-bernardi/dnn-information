@@ -7,7 +7,6 @@ import numpy as np
 # TEMP batch_size = 8
 # TEMP epochs = 160000 // 88
 # TEMP every_n was 10
-# TEMP num_of_bins was 40
 params = {
     "epochs" : 2,
     "lr_0" : 0.0001,
@@ -26,7 +25,7 @@ params = {
     "save_to_dir": "data/training_data/",
     "information": True,
     "every_n": 1,
-    "num_of_bins": 10
+    "num_of_bins": 40
 }
 
 # TODO - transforms - handle the dataset...

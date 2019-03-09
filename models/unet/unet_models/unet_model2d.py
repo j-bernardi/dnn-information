@@ -111,6 +111,7 @@ class UNet2D(nn.Module):
 
         ## Create the list ###
         num_layers += update(self.final_step, num_layers, append=True)
+        self.reset()
         
         
         # Check tracking correct layers

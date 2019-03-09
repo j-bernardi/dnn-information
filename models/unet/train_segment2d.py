@@ -89,7 +89,7 @@ def train(unet, trainloader, params, fake=False):
             # inputs, labels, set?? TODO - check 3rd 
             inputs, labels, weight, original_index = data
 
-            train_shuffles[epoch].append(original_index.item())
+            train_shuffles[epoch].extend(original_index.numpy().tolist())
 
             # Set up input images and labels
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
