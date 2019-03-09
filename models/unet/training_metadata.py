@@ -1,4 +1,4 @@
-import torch, os
+import torch, os, sys # TEMP
 import torch.nn.functional as F
 import numpy as np
 
@@ -9,11 +9,12 @@ import numpy as np
 # TEMP every_n was 10
 params = {
     "epochs" : 2,
-    "lr_0" : 0.0001,
+    "lr_0" : 0.0005,
     "batch_size" : 1,
     "workers" : 4,
     "voxel_size" : 9,
-    "smoothing_type": "weighted_vary_eps",
+    "one_hot": True,
+    "smoothing_type": "uniform_fixed_eps",
     "label_smoothing" : 0.1,
     "validation_split" : 0.2,
     "device" : torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
@@ -23,7 +24,7 @@ params = {
     "scan_location": "data/input_tensors/segmentation_data/datasets/",
     "save_run": True,
     "save_to_dir": "data/training_data/",
-    "information": True,
+    "information": False,
     "every_n": 1,
     "num_of_bins": 40
 }
@@ -44,7 +45,7 @@ def construct_file():
 
     return params["save_to_dir"] + file_name + ".txt"
 
-def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform", smoothing=0):
+def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoothing=0):
     """
     Calc CEL and apply various label smoothings.
     Based on uniform label smoothing here:
@@ -59,15 +60,15 @@ def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform", smoothing=0):
             if False, just return "standard" cross entropy loss
             else apply smoothing of type smoothing_type:
         smoothing_type: 
-            "uniform" 
+            1) "uniform_fixed_eps" 
                 Applies uniform smoothing, fixed magnitude
-            "uniform_vary_eps"
+            2) "uniform_vary_eps"
                 Applies uniform smoothing, vary magnitude depending on self-adjacency
-            "weighted_fixed_eps"
+            3) "weighted_fixed_eps"
                 Applies weighted smoothing of fixed mangnitude
                 E.g. weights into the classes depending on class adjacency
                 ignores self-adjacency
-            "weighted_vary_eps"
+            4) "weighted_vary_eps"
                 Applies weighted smoothing into adjacent classes only
                 Accounts for self-adj - varies magnitude of smoothing
         smoothing: 
@@ -82,6 +83,7 @@ def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform", smoothing=0):
     # If one hot encoding
     if one_hot:
 
+        ## INITIALISE ##
         n_batch = pred.size(0)
         n_class = pred.size(1)
 
@@ -92,126 +94,139 @@ def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform", smoothing=0):
             raise NotImplementedError("Only implemented for batch x X x Y (3D)\nGot %s." %\
                 (len(gold.shape)))
         
-        ## MAKE ONE HOT ##
+        ## MAKE LABEL ONE HOT ##
         one_hot = make_one_hot(reshaped_gold, n_class)
 
-        ## APPLY VARIOUS SMOOTHING TYPES ##
-        if smoothing_type.startswith("uniform"):
+        ## APPLY VARIOUS SMOOTHING TYPES to one_hot ##
+        if smoothing_type == "uniform_fixed_eps":
 
-            if smoothing_type == "uniform-vary-eps":
-                
-                # Tensor of (batch, class_name, class_name_adj_to) = count
-                adj_matrix = calc_adj_batch(gold.cpu().numpy())
+            # Apply uniform smoothing only
+            eps = smoothing
 
-                # Base smoothing on the class-class adjacency
-                eps = np.zeros((n_batch, n_class)) + smoothing
+            # For testing
+            old_one_hot = one_hot.clone()
 
-                # Adjacency magnitude per batch per class
-                adjacency_mag = np.zeros((n_batch, n_class))
+            old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
+            new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
+            
+            # Fix one hot
+            one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
 
-                # Weight eps depending on self-adjacency
-                for c in range(adj_matrix.shape[0]):
-                    
-                    if c == adj_matrix.shape[1] - 1:
-                        sum_others = adj_matrix[:, c, :c].sum(axis=2)
-                    else:
-                        sum_others = (adj_matrix[:, c, :c].sum(axis=2) + adj_matrix[:, c, (c+1):].sum(axis=2))
+            ## TEST ##
 
-                    # Shape batch, class
-                    adjacency_mag[:, c] = sum_others[:, c] / adj_matrix[:, c, c]
+            # Assert that structure has been maintained!
+            assert (old_max_indices == new_max_indices).all()
+            
+            # Do some view-testing (despite asserting structure is maintained)
+            """
+            for j in np.arange(150, 350, 25):
+                print("argmax (256,", j, ")", old_max_indices[0,256,j])
+                print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
+                print("one_hot (256,", j, ")", one_hot[0,:,256,j])
+            """
+            del old_one_hot, old_max_indices, new_max_indices
 
-                # Add on the adjacency at eps. If large, it increases eps, as desired
-                eps[:, :] += adjacency_mag[:, :]
-
-                eps = torch.from_numpy(eps).to(params["device"]).float()
-
-                # Across batches, class
-                smooth_one = torch.mm(one_hot.float(), (1.-eps))
-                assert smooth_one.shape == one_hot.shape
-                smooth_others = torch.mm((1.-eps), one_hot) / (n_class -1)
-                assert smooth_others.shape == one_hot.shape
-
-                # per row 
-                for i in range(smooth_one.shape[0]):
-                    assert smooth_one[i].sum() + smooth_others[i].sum() == 1.
-
-                one_hot =  smooth_one + smooth_others
-
-            else:
-
-                # Apply uniform epsilon smoothing        
-                eps = smoothing
-                one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
-
-
-        
-        else:
-            # Get the weighted epsilons based on class adjacency
+        elif smoothing_type in ["weighted_vary_eps", "uniform_vary_eps", "weighted_fixed_eps"]:
 
             # Tensor of (batch, class_name, class_name_adj_to) = count
             adj_matrix = calc_adj_batch(gold.cpu().numpy())
-            #print(adj_matrix.astype(int))
 
             # Base smoothing on the class-class adjacency
             eps = np.zeros((n_batch, n_class)) + smoothing
+            
+            # Tensor indicating smoothing of class[1] into class[2] (batch[0])
+            smooth_tens = np.zeros((n_batch, n_class, n_class))
 
-            # The smoothing into class(2) for each class(1) in the batch(0)
-            eps_tens = np.zeros((n_batch, n_class, n_class))
+            # Set self-adjacency magnitudes if eps will be varied
+            if smoothing_type == "weighted_vary_eps" or "uniform_vary_eps":
 
-            # Get the class-class epsilon - fixed or variable - if required, and add to base
-            if smoothing_type == "weighted_fixed_eps":
-                # E.g. fixed epsilon magnitude - don't change this
-                pass
-
-            elif smoothing_type == "weighted_vary_eps": 
-                
-                # Vary epsilon depending on adjacencies
                 for c in range(adj_matrix.shape[1]):
-                    
+
                     if c == adj_matrix.shape[1] - 1:
                         sum_others = adj_matrix[:, c, :c].sum()
                     else:
-                        sum_others = (adj_matrix[:, c, :c].sum(axis=(2)) + adj_matrix[:, c, (c+1):].sum())
-                    
-                    eps[:, c] +=  (sum_others / adj_matrix[:, c, c])[0]
+                        sum_others = (adj_matrix[:, c, :c].sum() + adj_matrix[:, c, (c+1):].sum())
 
-            # Now build the up tensor and do weighting
-            for i in range(eps_tens.shape[1]):
+                    # Update eps weights. Shape: batch, class
+                    eps[:, c] += (sum_others / adj_matrix[:, c, c])[0]
+            
+            # Now build the up the smoothing tensor and do weighting if required
+            for i in range(smooth_tens.shape[1]):
                 
-                # Set the inter-class error
-                eps_tens[:, i, i] = eps[:, i]
+                # Set the inter-class smoothing values
+                smooth_tens[:, i, i] = 1. - eps[:, i]
+                
+                # Set the non-self smoothing magnitudes
+                if smoothing_type == "uniform_vary_eps":
+                    # Get the row that isn't the c-c error - uniform in this case
+                    rest = np.zeros((n_batch, n_class - 1)) + eps[:, i] / (n_class - 1)
 
-                # Get the row that isn't the c-c error
-                if i == eps_tens.shape[1] - 1:
-                    rest = adj_matrix[:,i,:i]
-                else:
-                    rest = np.concatenate((adj_matrix[:, i, :i], adj_matrix[:, i, (i+1):]), axis=1)
+                elif smoothing_type == "weighted_vary_eps" or smoothing_type == "weighted_fixed_eps":
+                    # Do the weighting on the non-self-adjacency if weighted
+
+                    if i == smooth_tens.shape[1] - 1:
+                        rest = adj_matrix[:,i,:i]
+                    else:
+                        rest = np.concatenate((adj_matrix[:, i, :i], adj_matrix[:, i, (i+1):]), axis=1)
+                    
+                    for b in range(rest.shape[0]):
+                        rest[b] = eps[b, i] * (rest[b] / rest[b].sum())
+                        assert (rest[b].sum() - eps[b, i]) + 1. > 0.999
+                        assert (rest[b].sum() - eps[b, i]) + 1. < 1.001
+                        assert (rest[b].sum() - eps[b, i]) + 1. == 1.
 
                 assert len(rest.shape) == 2
-                
-                # Normalise so adds to the size of the error (eps[i])
-                for b in range(rest.shape[0]):
 
-                    rest[b] = eps[b, i] * (rest[b] / rest[b].sum())
+                # Put the rest back in to the smoothing tensor
+                smooth_tens[:, i, :i] = rest[:, :i]
+                if i + 1 < smooth_tens.shape[1]:
+                    smooth_tens[:, i, (i+1):] = rest[:, i:]
 
-                    assert (rest[b].sum() - eps[b, i]) + 1. > 0.95
-                    assert (rest[b].sum() - eps[b, i]) + 1. < 1.05
-                    assert (rest[b].sum() - eps[b, i]) + 1. == 1.
+            # Check the smooth matrix for (approx) normalisation
+            # COULD normalise but it doesn't work very consistently
+            assert (smooth_tens.sum(axis=2, keepdims=True) < 1.0001).all()
+            assert (smooth_tens.sum(axis=2, keepdims=True) > 0.999).all()
 
-                # Put it back in
-                eps_tens[:, i, :i] = rest[:, :i]
-                if i < eps_tens.shape[1] - 1:
-                    eps_tens[:, i, (i+1):] = rest[:, i:]
+            ## BUILD THE ONE-HOT LABEL UP ##
 
-                # Now set one hot
-                adj = (1. - eps_tens[:, gold[:,:,:].cpu().numpy(), i])
-                
-                smooth_one = one_hot[:,i,:,:].float() * torch.from_numpy(adj).to(params["device"]).float()#[:,:,:]
-                adj2 = eps_tens[:, gold[:,:,:].cpu().numpy(), i]
-                smooth_others = (1. - one_hot[:,i,:,:].float()) * torch.from_numpy(adj2).to(params["device"]).float()#[:,:,:]
-                one_hot[:,i,:,:] =  smooth_one + smooth_others #/ (n_class -1)
+            """
+            Using:
+                ONE_HOT - the currently one-hot labels to be smoothed
+                GOLD - 1 is tensor of one-hot indices
+                SMOOTH_TENS[b,gold,:] - the values that one_hot[i,:,k,l] should take
+            """
+
+            # for testing
+            old_one_hot = one_hot.clone()
+
+            # Use the smoothing matrix and gold
+            for c in range(one_hot.shape[1]):
+                one_hot[:,c,:,:] = torch.from_numpy(
+                    smooth_tens[:,gold[:,:,:].cpu().numpy(), c]).to(
+                        params["device"]).float()
+
+            old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
+            new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
+
+            # Do some view-testing (before asserting structure is maintained)
+            """
+            for j in np.arange(150, 350, 25):
+                print("argmax (256,", j, ")", old_max_indices[0,256,j])
+                print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
+                print("one_hot (256,", j, ")", one_hot[0,:,256,j])
+            """
+            # Assert that structure has been maintained!
+            assert (old_max_indices == new_max_indices).all()
+
+            # no longer needed
+            del old_one_hot, old_max_indices, new_max_indices
+
+            # Check that each one-hot abel still sums to (approx) 1.
+            assert (one_hot.sum(dim=1, keepdim=True) < 1.0001).all()
+            assert (one_hot.sum(dim=1, keepdim=True) > 0.9999).all()
 
         else:
+            # If none of the 4 smoothing regimes
             raise NotImplementedError
 
         ## CALC LOSS ## TODO - verify
@@ -221,7 +236,7 @@ def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform", smoothing=0):
         loss = -(one_hot * log_prb).sum(dim=1)
         loss = loss.masked_select(non_pad_mask).sum()  # average later
     
-    # loss from pred and gold, not one-hot    
+    # loss from pred and gold, not one-hot
     else:
 
         loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')

@@ -116,7 +116,8 @@ def train(unet, trainloader, params, fake=False):
                 return outputs.shape, outputs.numel()
 
             # Calc loss
-            loss = tm.calc_loss(outputs, labels, smoothing_type=params["smoothing_type"], smoothing=params["label_smoothing"])
+            loss = tm.calc_loss(outputs, labels, one_hot=params["one_hot"], 
+                                smoothing_type=params["smoothing_type"], smoothing=params["label_smoothing"])
 
             # calc accuracy
             _, pred_classes = torch.max(outputs.data, 1, keepdim=True)
