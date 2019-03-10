@@ -7,7 +7,7 @@ Code based on:
 https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py
 """
 
-import torch, gc
+import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F

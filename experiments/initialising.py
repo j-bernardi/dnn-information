@@ -3,7 +3,6 @@
 from models.unet import train_segment2d as ts
 from models.unet import training_metadata as tm
 
-
 lr_0s = [0.01, 0.001, 0.0001]
 batch_sizes = [4, 8, 16]
 epochs = [80, 120, 160]

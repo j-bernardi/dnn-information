@@ -1,0 +1,4 @@
+experiments/scp_help.txt
+experiments/slurm_submit
+experiments/*.sh
+bash
