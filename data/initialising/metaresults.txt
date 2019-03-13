@@ -1,0 +1,2 @@
+Experiment, Accuracy
+data/initialising/uniform_fixed_eps_lr001_ep1_bs1/,43.27125549316406

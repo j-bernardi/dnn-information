@@ -7,7 +7,7 @@ Code based on:
 https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_model.py
 """
 
-import torch
+import torch, os
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +15,7 @@ import torch.nn.functional as F
 class UNet2D(nn.Module):
     """The network."""
 
-    def __init__(self, in_channel=1, n_classes=9, device="find"):
+    def __init__(self, in_channel=1, n_classes=9, device="find", experiment_folder="no"):
         """
         Archtecture modelled from:
             https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/
@@ -40,6 +40,20 @@ class UNet2D(nn.Module):
         else: 
             self.device = torch.device(device)
 
+        # Whether intermediate reps should be saved to a file, or to a list
+        if experiment_folder == "no":
+            self.reps_to_file = experiment_folder
+        else:
+            
+            # Set the reps folder
+            self.reps_to_file = experiment_folder + "reps/"
+            
+            # Make the directory if it doesn't exist
+            if not os.path.exists(self.reps_to_file):
+                os.makedirs(self.reps_to_file)
+        
+        self.epoch_count = 0
+        
         # The reps per epoch
         self.representations_per_epochs = []
         # A list holding all the reps from this epoch
@@ -263,8 +277,17 @@ class UNet2D(nn.Module):
     def next_epoch(self):
         """Appends the current reps to the epoch reps, resets."""
 
-        # Save the epoch - list of representations in this epoch per layer being saved
-        self.representations_per_epochs.append(self.current_representations)
+        self.epoch_count += 1
+
+        if self.reps_to_file == "no":
+
+            # Save the epoch - list of representations in this epoch per layer being saved
+            self.representations_per_epochs.append(self.current_representations)
+
+        else:
+            
+            torch.save(self.current_representations, 
+                       self.reps_to_file + "epoch_" + str(self.epoch_count) + ".pt")
 
         # Empty out current reps
         self.reset() 

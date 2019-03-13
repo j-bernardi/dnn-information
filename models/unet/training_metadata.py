@@ -8,11 +8,10 @@ import numpy as np
 # TEMP epochs = 160000 // 88
 # TEMP every_n was 10
 params = {
-    "epochs" : 2,
+    "scan_location": "data/input_tensors/segmentation_data/datasets/",
+    "epochs" : 1,
     "lr_0" : 0.0005,
     "batch_size" : 1,
-    "workers" : 4,
-    "voxel_size" : 9,
     "one_hot": True,
     "smoothing_type": "uniform_fixed_eps",
     "label_smoothing" : 0.1,
@@ -20,30 +19,42 @@ params = {
     "device" : torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     "lr_idxs_array": np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95]),
     "lr_array": np.array([1, 0.5, 0.25, 0.125, 0.015625, 0.00390625, 0.001953125]),
-    "save_location": "models/unet/saved_models",
-    "scan_location": "data/input_tensors/segmentation_data/datasets/",
-    "save_run": True,
-    "save_to_dir": "data/training_data/",
+    "workers" : 4,
+    "voxel_size" : 9,
     "information": False,
     "every_n": 1,
     "num_of_bins": 40
 }
 
+## SAVE THE MODEL ##
+params["save_model"] = True
+
+## Save the training and test info ##
+params["save_run"] = True
+
 # TODO - transforms - handle the dataset...
 
-def construct_file():
+def construct_file(params, direct):
     """Produces file with headers."""
 
-    file_name = params["smoothing_type"] + "_" + str(params["batch_size"]) + "_" + str(params["epochs"]) + "/"
-    
-    if not os.path.exists(params["save_to_dir"] + file_name):
-        os.makedirs(params["save_to_dir"] + file_name)
+    if direct == "no":
+        return "no"
 
-    with open(params["save_to_dir"] + file_name +"DETAILS.txt", 'w') as file:
+    file_name = params["smoothing_type"] + "_lr" + str(params["lr_0"]).split(".")[1] +\
+                "_ep" + str(params["epochs"]) +\
+                "_bs" + str(params["batch_size"]) + "/"
+    
+    if not os.path.exists(direct + file_name):
+        os.makedirs(direct + file_name)
+
+    with open(direct + file_name +"DETAILS.txt", 'w') as file:
         for key in params:
             file.write(key + ": " + str(params[key]) + "\n")
 
-    return params["save_to_dir"] + file_name + ".txt"
+    with open(direct + file_name + "../.gitignore", "a+") as gi:
+        gi.write(file_name[:-1] + "\n") # remove the last /
+
+    return direct + file_name
 
 def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoothing=0):
     """

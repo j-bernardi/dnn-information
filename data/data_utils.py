@@ -7,7 +7,7 @@ from torchvision import transforms, utils
 
 #print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2]))
 #sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2]))
-from models.unet import UNet3D, UNet2D
+#from models.unet import UNet3D, UNet2D
 from models.unet.training_metadata import make_one_hot
 
 ## DATA LOADING ##
@@ -47,7 +47,7 @@ def get_imdb_data(fn, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=
     a_group_key = list(Label.keys())[0]
     Label = list(Label[a_group_key])
     Label = np.squeeze(np.asarray(Label))
-    
+
     # indexes
     set = h5py.File(fn + "set.h5", 'r')
     a_group_key = list(set.keys())[0]
@@ -96,9 +96,16 @@ def get_imdb_data(fn, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=
     Tr_weights = np.tile(Tr_weights, [1, NumClass, 1, 1])
 
     Te_Dat = Data[test_id, :, :, :]
-    # TODO - don't squeeze in first axis (when test size is 1)
-    Te_Label = np.squeeze(Label[test_id, :, :, :]) - 1
+    
+    # Don't squeeze in first axis (when test size is 1)
+    #print("before\n", Label[0,0,:,:])
+    if Te_Dat.shape[0] == 1:
+        Te_Label = Label[test_id, :, :, :].reshape((Te_Dat.shape[0], Label.shape[2], Label.shape[3])) - 1
+    else:
+        Te_Label = np.squeeze(Label[test_id, :, :, :]) - 1
+    #print("after\n", Te_Label[0,:,:])
     #print(Te_Label.shape)
+
     Te_weights = weights[test_id, :, :, :]
     Te_weights = np.tile(Te_weights, [1, NumClass, 1, 1])
 
@@ -368,6 +375,7 @@ def segment_tensors(this_input_dir="sample_scans/", classes=15, to_generate=10, 
         f.write(str(len([f for f in os.listdir(input_root_dir + this_input_dir) if f.endswith(".pt") and f.startswith("image")])) + " files" 
                 + "\nclasses=" + str(classes))
 
+"""
 def make_model(model_loc, device, dim=2):
     if "2" in model_loc:
         unet = UNet2D()
@@ -384,3 +392,4 @@ def make_model(model_loc, device, dim=2):
     unet.to(device)
 
     return unet
+"""

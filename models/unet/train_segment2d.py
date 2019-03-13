@@ -11,12 +11,8 @@ from unet_models.unet_model2d import UNet2D
 
 params = tm.params 
 
-# Where to save the model
-params["save"] = True
-params["save_location"] += "/unet2d.pth"
-
 # limit number for testing
-number_samples = 3#10 # 0 for all
+number_samples = 5
 
 # TODO - transforms - handle the dataset...
 
@@ -41,17 +37,30 @@ def load_data(params):
 
     return trainloader, testloader, classes
 
-def load_model(params):
+def load_model(params, experiment_folder="no"):
 
-    unet = UNet2D()
+    unet = UNet2D(experiment_folder=experiment_folder)
     unet.float()
+
+    # Multi GPU usage
+    if torch.cuda.device_count() > 1:
+        
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
+        unet = nn.DataParallel(unet)
+
     print("Moving model to", params["device"])
     unet = unet.to(params["device"])
 
     return unet
 
-def train(unet, trainloader, params, fake=False):
+def train(unet, trainloader, params, fake=False, experiment_folder="no"):
     """Perform training."""
+
+    # Set and create the reporting directory
+    reporting_file = experiment_folder + "reporting/"
+    if not os.path.exists(reporting_file):
+        os.makedirs(reporting_file)
 
     loss_list = []
     # loss and accuracy per epoch
@@ -143,8 +152,8 @@ def train(unet, trainloader, params, fake=False):
                 print('[%d, %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss))
                 
-                if params["save_run"]:
-                    with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
+                if reporting_file != "no":
+                    with open(reporting_file + "TRAIN.txt", 'a+') as ef:
                         ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss / this_num))
 
                 running_loss = 0.0
@@ -164,8 +173,8 @@ def train(unet, trainloader, params, fake=False):
               (epoch + 1, epoch_loss / total_num, accuracy))
         
         # Save to file
-        if params["save_run"]:
-            with open(params["experiment_file"].replace(".txt", "TRAIN.txt"), 'a+') as ef:
+        if reporting_file != "no":
+            with open(reporting_file + "TRAIN.txt", 'a+') as ef:
                 ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss, accuracy))
 
         epoch_loss = 0.0
@@ -173,7 +182,12 @@ def train(unet, trainloader, params, fake=False):
     return outputs.shape, outputs.numel(), epoch_mean_loss, accuracy_mean_val, train_shuffles
 
 def do_info(unet, training_order, trainloader, params):
-    """Do the information analysis."""
+    """
+    Do the information analysis.
+    NOTE - currently only implemented for reps saved as list
+    Not to file - need to reconstruct reps list from files if taking this approach
+    TOOD ^
+    """
 
     ws = tm.get_aligned_representations(unet.representations_per_epochs, training_order)
 
@@ -233,10 +247,14 @@ def get_original_order(trainloader):
 
     return X_train, y_one_hot
 
-def test(unet, testloader, params, shape, numel, classes):
+def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"):
     """Test the network."""
 
     print("Testing")
+
+    reporting_file = experiment_folder + "reporting/"
+    if not os.path.exists(reporting_file):
+        os.makedirs(reporting_file)
     
     # Total cells classified, total correct, the number of batches seen
     total, total_all_classes, correct_count, num_batches = 0, 0, 0, 0
@@ -273,7 +291,8 @@ def test(unet, testloader, params, shape, numel, classes):
             
 
             ## GET OUTPUTS ## 
-            inputs, labels, _ = data
+            inputs, labels, _, og_idx = data
+            print("labels", labels.shape)
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
             #data['image'].float().to(params["device"]), data['classes'].to(params["device"])
         
@@ -281,12 +300,14 @@ def test(unet, testloader, params, shape, numel, classes):
 
             ## CALCULATE CONFIDENCES and LABELS ## 
             # predicted is the predicted class for each position - (bs,1,z,x,y)
+            max_conf_matrix, predicted = torch.max(outputs, 1, keepdim=True)
 
-            max_conf_matrix, predicted = torch.max(outputs.data, 1, keepdim=True)
+            #print("out", predicted.shape)
+            one_hot_predicted = tm.make_one_hot(predicted, C=len(classes)).byte()
+            assert one_hot_predicted.sum() == total_el_per_batched_class
 
-            one_hot_predicted = tm.make_one_hot(predicted, len(classes)).byte()
-
-            one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), len(classes)).byte()
+            print("in", labels.shape)
+            one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), C=len(classes)).byte()
 
             # The confidences of predicted classes (0s elsewhere - sparse, one-hot rep)
             this_confs = torch.where(one_hot_predicted == 1, outputs, torch.tensor(0., device=params["device"]))
@@ -340,10 +361,6 @@ def test(unet, testloader, params, shape, numel, classes):
     class_false_positive = torch.sum(false_positive, (0,2,3), keepdim=False)
     class_false_negative = torch.sum(false_negative, (0,2,3), keepdim=False)
     class_correct_not_labelled = torch.sum(correct_not_labelled, (0,2,3), keepdim=False)
-    
-    ## my_test ##
-    print("one hot predicted sum", one_hot_predicted.sum())
-    assert one_hot_predicted.sum() == total_el_per_batched_class
 
     # calc overall accuracy TODO - check using correct totals
     overall_accuracy = 100. * (correct.sum().item() / total)
@@ -371,9 +388,9 @@ def test(unet, testloader, params, shape, numel, classes):
         (overall_accuracy, average_confidence, overall_false_positive, 
             overall_false_negative, overall_corr_not_label))
 
-    if params["save_run"]:
-        with open(params["experiment_file"].replace(".txt", "TEST.txt"), 'a+') as ef:
-            ef.write("%.3f,%.3f,%d,%d,%d\n" % \
+    if reporting_file != "no":
+        with open(reporting_file + "TEST.txt", 'a+') as ef:
+            ef.write("total,%.3f,%.3f,%d,%d,%d\n" % \
                 (overall_accuracy, average_confidence, overall_false_positive, 
                  overall_false_negative, overall_corr_not_label))
     
@@ -407,32 +424,36 @@ def test(unet, testloader, params, shape, numel, classes):
             (classes[c], this_acc, this_conf, this_false_pos, 
                 this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
 
-        if params["save_run"]:
-            with open(params["experiment_file"].replace(".txt", "TEST.txt"), 'a+') as ef:
-                ef.write("CLASS%s,%.3f,%.3f,%d,%d,%d,%d,%d\n" % \
+        if reporting_file != "no":
+            with open(reporting_file + "TEST.txt", 'a+') as ef:
+                ef.write("%s,%.3f,%.3f,%d,%d,%d,%d,%d\n" % \
                     (classes[c], this_acc, this_conf, this_false_pos, 
                     this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
 
+    return overall_accuracy
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
     
 
     if params["save_run"]:
-        params["experiment_file"] = tm.construct_file()
+        experiment_folder = tm.construct_file(params, "data/training_data/")
+    else:
+        experiment_folder = "no"
 
     ## LOAD DATA ##
     trainloader, testloader, classes = load_data(params)
 
     # LOAD MODEL #
-    unet = load_model(params)
+    unet = load_model(params, experiment_folder=experiment_folder)
 
     ## TRAIN ##
-    shape, numel, epoch_mean_loss, accuracy_mean_val, training_order = train(unet, trainloader, params, fake=False)
+    shape, numel, epoch_mean_loss, accuracy_mean_val, training_order =\
+        train(unet, trainloader, params, fake=False, experiment_folder=experiment_folder)
 
-    if params["save"]:
-        print("\nSaving model to", params["save_location"].replace("/unet2d.pth", "/unet2d_TRAINED.pth"))
-        torch.save(unet.state_dict(), params["save_location"].replace("/unet2d.pth", "/unet2d_TRAINED.pth"))
+    if params["save_model"]:
+        print("\nSaving model to", experiment_folder + "unet2d_TRAINED.pth")
+        torch.save(unet.state_dict(), experiment_folder + "unet2d_TRAINED.pth")
 
     print("Training complete")
 
@@ -457,10 +478,9 @@ if __name__ == "__main__":
 
         plot_information.plot_information_plane(IXT_array, ITY_array, num_epochs=params["epochs"], every_n=params["every_n"])
 
-    sys.exit()
     ## TEST ##
-    test(unet, testloader, params, shape, numel, classes)
+    acc = test(unet, testloader, params, shape, numel, classes, experiment_folder=experiment_folder)
 
-    if params["save"]:
-        print("\nSaving model to", params["save_location"])
-        torch.save(unet.state_dict(), params["save_location"])
+    if params["save_model"]:
+        print("\nSaving model to", experiment_folder + "unet2d_TRAINED.pth")
+        torch.save(unet.state_dict(), experiment_folder + "unet2d_TRAINED.pth")
