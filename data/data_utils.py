@@ -8,7 +8,6 @@ from torchvision import transforms, utils
 #print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2]))
 #sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2]))
 #from models.unet import UNet3D, UNet2D
-from models.unet.training_metadata import make_one_hot
 
 ## DATA LOADING ##
 
@@ -32,7 +31,7 @@ class ImdbData(data.Dataset):
     def __len__(self):
         return len(self.y)
 
-def get_imdb_data(fn, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=4, NumClass=9):
+def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=4, NumClass=9, chop=True):
 
     classes = ["class" + str(i) for i in range(9)]
 
@@ -61,12 +60,17 @@ def get_imdb_data(fn, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=
     Data = Data.reshape([sz[0], 1, sz[1], sz[2]])
     
     print("Data shape", Data.shape)
-    Data = Data[:, :, 61:573, :] # WAS: Data = Data[:, :, 61:573, :]?
+    if chop:
+        Data = Data[:, :, 61:573, :] # WAS: Data = Data[:, :, 61:573, :]?
     
     print("Label shape", Label.shape)
-    weights = Label[:, 1, 61:573, :]
-    Label = Label[:, 0, 61:573, :]
-    
+    if chop:
+        weights = Label[:, 1, 61:573, :]
+        Label = Label[:, 0, 61:573, :]
+    else:
+        weights = Label[:, 1, :, :]
+        Label = Label[:, 0, :, :]
+
     sz = Label.shape
     Label = Label.reshape([sz[0], 1, sz[1], sz[2]])
     weights = weights.reshape([sz[0], 1, sz[1], sz[2]])
@@ -75,17 +79,18 @@ def get_imdb_data(fn, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=
     
     dataset_size = Data.shape[0]
     indices = list(range(dataset_size))
+    #print(indices)
 
+    if shuffle:
+        np.random.seed(42)
+        np.random.shuffle(indices)
+    #print(indices)
     # reduce size if desired
     if num > 0:
         dataset_size = num
         indices = indices[:num]
-    
+    #print(indices)
     split = int(np.floor(val_split * dataset_size))
-    
-    if shuffle:
-        np.random.seed(42)
-        np.random.shuffle(indices)
     
     train_id, test_id = indices[split:], indices[:split]
 
@@ -112,8 +117,66 @@ def get_imdb_data(fn, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=
     train_loader = torch.utils.data.DataLoader(ImdbData(Tr_Dat, Tr_Label, Tr_weights), batch_size=batch_size, shuffle=True, num_workers=workers)
     val_loader = torch.utils.data.DataLoader(ImdbData(Te_Dat, Te_Label, Te_weights), batch_size=batch_size, shuffle=False, num_workers=workers)
 
-    return (train_loader, val_loader), classes
+    return (train_loader, val_loader), (train_id, test_id), classes
 
+class Scan2dDataset(Dataset):
+    """
+    Retinal scan dataset.
+    Just stores the file location and creates objects for each image in the dataset...
+    """
+
+    def __init__(self, root_dir, transform=None, weight=False):
+        """
+        Args:
+            csv_file (string) path to csv file with annot
+            root_dir (string) dir with images
+            transform (callable, optional): apply trans to sample
+        NOTES:
+            # we augmented the data by applying
+            #   affine and
+            #   elastic transformations
+            # jointly over the inputs and ground-truth segmentations
+            # Intensity transformations over the inputs were also applied.
+
+        """
+        # TODO: self.labels = pd.get_dummies(self.scan_frame[-1]).as_matrix
+        self.root_dir = root_dir
+        self.transform = transform
+        self.weight = weight
+
+    def __len__(self):
+        """Length of object."""
+
+        return len([f for f in os.listdir(self.root_dir) if f.endswith(".pt") and f.startswith("image")])
+
+    def __getitem__(self, index):
+        """
+        Returns a single dataframe representing an image file
+        with a given index.
+        """
+        img_name = self.root_dir + "image" + str(index) + ".pt"
+        class_name = self.root_dir + "class" + str(index) + ".pt"
+        if self.weight:
+            weight_name = self.root_dir + "weight" + str(index) + ".pt"
+
+        img_tensor = torch.load(img_name)
+        class_tensor = torch.load(class_name)
+        if self.weight:
+            weight_tensor = torch.load(weight_name)
+
+        #print("Got item", index)
+        #print(img_tensor.shape)
+        #print(class_tensor.shape)
+
+            
+            sample = {'image': img_tensor, 'classes': class_tensor, 'weights': weight_tensor}
+        else:
+            sample = {'image': img_tensor, 'classes': class_tensor}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample, index
 
 class VoxelsDataset(Dataset):
     """
@@ -158,15 +221,22 @@ class VoxelsDataset(Dataset):
         img_tensor = np.concatenate([it[np.newaxis] for it in img_tensor])
         class_tensor = np.concatenate([it[np.newaxis] for it in class_tensor])
 
-        sample = {'image': img_tensor, 'classes': class_tensor}
-
         #print("Got item", index)
         #print(img_tensor.shape)
         #print(class_tensor.shape)
+
+        if "weight0.pt" in os.listdir(self.root_dir):
+            weight_name = self.root_dir + "weight" + str(index) + ".pt"
+            weight_tensor = [torch.load(weight_name)]
+            weight_tensor = np.concatenate([it[np.newaxis] for it in weight_tensor])
+            sample = {'image': img_tensor, 'classes': class_tensor, 'weights': weight_tensor}
+        else:
+            sample = {'image': img_tensor, 'classes': class_tensor}
         
         if self.transform:
             sample = self.transform(sample)
-        return sample
+
+        return sample, index
 
 def get_voxels_data(location, batch_size, workers, val_split, shuffle=True, num=0):
     """
@@ -202,6 +272,108 @@ def get_voxels_data(location, batch_size, workers, val_split, shuffle=True, num=
                    's10', 's11', 's12', 's13', 's14')
 
     return trainloader, testloader, classes
+
+def h5_to_torch(h5_file="input_tensors/segmentation_data/datasets/", location_to="input_tensors/segmentation_data/torch_datasets/", weight=False):
+    """Saves h5 file to torch tensors"""
+
+    # Load DATA
+    Data = h5py.File(h5_file + "Data.h5", 'r')
+    a_group_key = list(Data.keys())[0]
+    Data = list(Data[a_group_key])
+    Data = np.squeeze(np.asarray(Data))
+    
+    # labels
+    Label = h5py.File(h5_file + "label.h5", 'r')
+    a_group_key = list(Label.keys())[0]
+    Label = list(Label[a_group_key])
+    Label = np.squeeze(np.asarray(Label))
+
+    # indexes
+    set = h5py.File(h5_file + "set.h5", 'r')
+    a_group_key = list(set.keys())[0]
+    set = list(set[a_group_key])
+    set = np.squeeze(np.asarray(set))
+    
+    sz = Data.shape
+
+    # Add gray channel
+    Data = Data.reshape([sz[0], 1, sz[1], sz[2]])
+    
+    # Reshape
+    Data = Data[:, :, 61:573, :]
+    
+    # Get labels and weights
+    if weight:
+        weights = Label[:, 1, 61:573, :]
+    Label = Label[:, 0, 61:573, :]
+    
+    sz = Label.shape
+    if weight:
+        weights = weights.reshape([sz[0], 1, sz[1], sz[2]])
+        weights = torch.from_numpy(np.tile(weights.numpy(), [1, NumClass, 1, 1]))
+
+
+    ## TO TORCH - for each in the batch? ##
+    with torch.no_grad():
+        
+        assert Data.shape[0] == Label.shape[0]
+        if weight:
+            assert Label.shape[0] == weights.shape[0]
+
+        Data = torch.from_numpy(Data)
+        Label = torch.from_numpy(Label)
+        if weight:
+            weights = torch.from_numpy(weights)
+
+        print("Saving data", Data[0,:,:,:].shape)
+        print("Saving label", Label[0,:,:].shape)
+        if weight:
+            print("Saving weights", weights[0,:,:,:].shape)
+
+        for b in range(Data.size(0)):
+        
+            torch.save(Data[b,:,:,:], location_to + "image" + str(b) + ".pt")
+
+            torch.save(Label[b,:,:], location_to + "class" + str(b) + ".pt")
+            if weight:
+                torch.save(weights[b,:,:,:], location_to + "weight" + str(b) + ".pt")
+
+
+    print("Complete")
+
+def get_torch_segmentation_data(location, batch_size=8, val_split=0.8, num=0, shuffle=True, workers=4, NumClass=9):
+
+    scan_dataset = Scan2dDataset(location)
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        scan_dataset.transform
+    ])
+
+    # Creating data indices for training and validation splits:
+    if num > 0:
+        dataset_size = num
+    else:
+        dataset_size = len(scan_dataset)
+    
+    indices = list(range(dataset_size))
+    split = int(np.floor(val_split * dataset_size))
+    
+    if shuffle:
+        np.random.seed(42)
+        np.random.shuffle(indices)
+    
+    train_indices, val_indices = indices[split:], indices[:split]
+
+    train_sampler = torch.utils.data.SubsetRandomSampler(train_indices)
+    valid_sampler = torch.utils.data.SubsetRandomSampler(val_indices)
+
+    trainloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=workers)
+    testloader = torch.utils.data.DataLoader(scan_dataset, batch_size=batch_size, sampler=valid_sampler, num_workers=workers)
+
+    classes = ["class" + str(i) for i in range(NumClass)]
+
+    return (trainloader, testloader), classes
 
 ## RANDOM GENERATION ##
 
@@ -361,6 +533,7 @@ def segment_tensors(this_input_dir="sample_scans/", classes=15, to_generate=10, 
             _, max_matrix = torch.max(outputs.data, 1)
             
             # make class encoding one-hot
+            from models.unet.training_metadata import make_one_hot
             one_hot = make_one_hot(max_matrix.unsqueeze(0))
 
             # save the prediction
@@ -393,3 +566,28 @@ def make_model(model_loc, device, dim=2):
 
     return unet
 """
+
+if __name__ == "__main__":
+    #print(os.listdir("input_tensors"))
+    #h5_to_torch()
+
+
+    import matplotlib.pyplot as plt
+    (train_loader, val_loader), _, classes = get_imdb_data("input_tensors/segmentation_data/datasets/", batch_size=1, shuffle=True, num=5, chop=True)
+    
+    print("loaded", len(train_loader), "images")
+    
+    for i, data in enumerate(train_loader, 0):
+        
+        inputs, labels, _, og_idx = data
+
+        print("enumerate index", i)
+        print("Image index", og_idx[0].item())
+        plt.imshow(torch.squeeze(inputs, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
+        plt.figure()
+
+        # Save label
+        plt.imshow(labels[0,:,:].cpu().numpy(), cmap="gray")
+        
+        plt.show()
+        plt.clf()

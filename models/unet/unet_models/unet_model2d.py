@@ -15,7 +15,7 @@ import torch.nn.functional as F
 class UNet2D(nn.Module):
     """The network."""
 
-    def __init__(self, in_channel=1, n_classes=9, device="find", experiment_folder="no"):
+    def __init__(self, in_channel=1, n_classes=9, device="find", experiment_folder="no", save_reps=False):
         """
         Archtecture modelled from:
             https://lmb.informatik.uni-freiburg.de/people/ronneber/u-net/
@@ -35,23 +35,31 @@ class UNet2D(nn.Module):
         self.in_channel = in_channel
         self.n_classes = n_classes
 
+        # Whether to save reps as you go
+        self.save_reps = save_reps
+
         if device == "find":
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         else: 
             self.device = torch.device(device)
 
-        # Whether intermediate reps should be saved to a file, or to a list
-        if experiment_folder == "no":
-            self.reps_to_file = experiment_folder
-        else:
+        # If saving reps...
+        if self.save_reps:
+
+            # If putting in state dict
+            if experiment_folder == "no":
+                self.reps_to_file = "no"
             
-            # Set the reps folder
-            self.reps_to_file = experiment_folder + "reps/"
-            
-            # Make the directory if it doesn't exist
-            if not os.path.exists(self.reps_to_file):
-                os.makedirs(self.reps_to_file)
-        
+            # If saving to file
+            else:
+                
+                # Set the reps folder
+                self.reps_to_file = experiment_folder + "reps/"
+                
+                # Make the directory if it doesn't exist
+                if not os.path.exists(self.reps_to_file):
+                    os.makedirs(self.reps_to_file)
+
         self.epoch_count = 0
         
         # The reps per epoch
@@ -279,15 +287,16 @@ class UNet2D(nn.Module):
 
         self.epoch_count += 1
 
-        if self.reps_to_file == "no":
+        if self.save_reps:
+            if self.reps_to_file == "no":
 
-            # Save the epoch - list of representations in this epoch per layer being saved
-            self.representations_per_epochs.append(self.current_representations)
+                # Save the epoch - list of representations in this epoch per layer being saved
+                self.representations_per_epochs.append(self.current_representations)
 
-        else:
-            
-            torch.save(self.current_representations, 
-                       self.reps_to_file + "epoch_" + str(self.epoch_count) + ".pt")
+            else:
+                
+                torch.save(self.current_representations, 
+                           self.reps_to_file + "epoch_" + str(self.epoch_count) + ".pt")
 
         # Empty out current reps
         self.reset() 

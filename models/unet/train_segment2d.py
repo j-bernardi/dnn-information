@@ -2,21 +2,17 @@ import torch, torchvision, os, sys, time, importlib
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
 
 import training_metadata as tm
-import plot_information, information_process
+# import plot_information, information_process # TEMP - not needed for now
 
 # Import the model
 from unet_models.unet_model2d import UNet2D
 
-params = tm.params 
-
-# limit number for testing
-number_samples = 5
-
 # TODO - transforms - handle the dataset...
 
-def load_data(params):
+def load_h5_data(params, number_samples=-1):
 
     # Data handler 
     print("Appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3]))
@@ -25,7 +21,28 @@ def load_data(params):
 
     # Load in
     print("Loading images")
-    (trainloader, testloader), classes = get_imdb_data(
+    (trainloader, testloader), (train_id, test_id), classes = get_imdb_data(
+        params["scan_location"], val_split=params["validation_split"], 
+        num=number_samples, workers=params["workers"], 
+        batch_size=params["batch_size"])
+
+    # Report
+    print("Loaded.")
+    print("len trainset", len(trainloader))
+    print("len testset", len(testloader))
+
+    return trainloader, testloader, train_id, test_id, classes
+
+def load_torch_data(params, number_samples=-1):
+
+    # Data handler 
+    print("Appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3]))
+    sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3]))
+    from data.data_utils import get_torch_segmentation_data
+
+    # Load in
+    print("Loading images")
+    (trainloader, testloader), classes = get_torch_segmentation_data(
         params["scan_location"], val_split=params["validation_split"], 
         num=number_samples, workers=params["workers"], 
         batch_size=params["batch_size"])
@@ -37,9 +54,9 @@ def load_data(params):
 
     return trainloader, testloader, classes
 
-def load_model(params, experiment_folder="no"):
+def load_model(params, experiment_folder="no", save_reps=False):
 
-    unet = UNet2D(experiment_folder=experiment_folder)
+    unet = UNet2D(experiment_folder=experiment_folder, save_reps=save_reps)
     unet.float()
 
     # Multi GPU usage
@@ -47,14 +64,14 @@ def load_model(params, experiment_folder="no"):
         
         print("Let's use", torch.cuda.device_count(), "GPUs!")
         # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
-        unet = nn.DataParallel(unet)
+        unet = torch.nn.DataParallel(unet)
 
     print("Moving model to", params["device"])
     unet = unet.to(params["device"])
 
     return unet
 
-def train(unet, trainloader, params, fake=False, experiment_folder="no"):
+def train(unet, trainloader, params, fake=False, experiment_folder="no", torch_data=False):
     """Perform training."""
 
     # Set and create the reporting directory
@@ -77,7 +94,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
     # Adam optimizer - https://arxiv.org/abs/1412.6980 #
     optimizer = optim.Adam(unet.parameters(), lr=params["lr_0"])
 
-    unet.reset()
+    if torch.cuda.device_count() > 1:
+        unet.module.reset()
+    else:
+        unet.reset()
 
     print("Starting training.")
     
@@ -91,12 +111,22 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
         this_num = 0
         train_shuffles.append([])
 
-        unet.reset()
+        if torch.cuda.device_count() > 1:
+            unet.module.reset()
+        else:
+            unet.reset()
         
         for i, data in enumerate(trainloader, 0):
 
-            # inputs, labels, set?? TODO - check 3rd 
-            inputs, labels, weight, original_index = data
+            if torch_data:
+                
+                inputs, labels, original_index = data[0]["image"], data[0]["classes"], data[1]
+                #print("inputs, labels\n", inputs.shape, labels.shape)
+
+            else:
+
+                inputs, labels, weight, original_index = data
+                #print("inputs, labels, weight\n", inputs.shape, labels.shape, weight.shape)
 
             train_shuffles[epoch].extend(original_index.numpy().tolist())
 
@@ -126,11 +156,16 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
 
             # Calc loss
             loss = tm.calc_loss(outputs, labels, one_hot=params["one_hot"], 
-                                smoothing_type=params["smoothing_type"], smoothing=params["label_smoothing"])
+                                                 smoothing_type=params["smoothing_type"], 
+                                                 smoothing=params["label_smoothing"])
 
             # calc accuracy
-            _, pred_classes = torch.max(outputs.data, 1, keepdim=True)
+            pred_classes = torch.argmax(outputs.data, dim=1, keepdim=True)
+            
+            #print("Pred classes", pred_classes.shape)
+            #print("labels before", labels.shape)
             shaped_labels = labels.view(labels.size(0), 1, labels.size(1), labels.size(2))
+            #print("Labels after", shaped_labels.shape)
             
             correct += torch.eq(pred_classes, shaped_labels.long()).float().sum()
             total_el += outputs.numel()
@@ -160,7 +195,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                 this_num = 0
 
         ## EPOCH COMPLETE ##
-        unet.next_epoch()
+        if torch.cuda.device_count() > 1:
+            unet.module.next_epoch()
+        else:   
+            unet.next_epoch()
 
         ## Track losses / accuracy per epoch ##
         accuracy = 100*correct/total_el
@@ -188,9 +226,10 @@ def do_info(unet, training_order, trainloader, params):
     Not to file - need to reconstruct reps list from files if taking this approach
     TOOD ^
     """
-
-    ws = tm.get_aligned_representations(unet.representations_per_epochs, training_order)
-
+    if torch.cuda.device_count() > 1:
+        ws = tm.get_aligned_representations(unet.module.representations_per_epochs, training_order)
+    else:
+        ws = tm.get_aligned_representations(unet.representations_per_epochs, training_order)
     # TODO - have unet store the order in which the training data came, too (e.g. X_train)
     X_train, y_one_hot = get_original_order(trainloader)
     
@@ -247,7 +286,7 @@ def get_original_order(trainloader):
 
     return X_train, y_one_hot
 
-def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"):
+def test(unet, testloader, params, shape, numel, classes, experiment_folder="no", torch_data=False, save_graph=False):
     """Test the network."""
 
     print("Testing")
@@ -286,25 +325,62 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
     #class_tots_all_class = torch.tensor([0] * len(classes), device=params["device"])
 
     d_count = 0
+    first = True
     with torch.no_grad():
         for data in testloader:
-            
 
             ## GET OUTPUTS ## 
-            inputs, labels, _, og_idx = data
-            print("labels", labels.shape)
+            if torch_data:
+                inputs, labels, og_idx = data[0]["image"], data[0]["classes"], data[1]
+            else:
+                inputs, labels, _, og_idx = data
+            #print("inputs", inputs.shape)
+            #print("labels", labels.shape)
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
             #data['image'].float().to(params["device"]), data['classes'].to(params["device"])
         
             outputs = unet(inputs)
 
             ## CALCULATE CONFIDENCES and LABELS ## 
-            # predicted is the predicted class for each position - (bs,1,z,x,y)
+            # predicted is the predicted class for each position - (bs,1,x,y) - same as inputs
             max_conf_matrix, predicted = torch.max(outputs, 1, keepdim=True)
+
+            ## IMAGE is predicted
+
+            if save_graph and first:
+                
+                first = False
+                
+                # Save original image
+                try:
+                    print("Image index", og_idx[0])
+                    plt.imshow(torch.squeeze(inputs, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
+                    plt.savefig(reporting_file + "original_image" + str(og_idx[0].item()) + ".png")
+                    plt.clf()
+                except:
+                    print("Failed to visualise inputs", inputs.shape)
+
+                # Save label
+                try:
+                    plt.imshow(labels[0,:,:].cpu().numpy(), cmap="gray")
+                    plt.savefig(reporting_file + "labels" + str(og_idx[0].item()) + ".png")
+                    plt.clf()
+                except:
+                    print("Failed to visualise inputs", labels.shape)
+
+                # save output
+                try:
+                    # matplotlib to save
+                    plt.imshow(torch.squeeze(predicted, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
+                    #print(predicted)
+                    plt.savefig(reporting_file + "output" + str(og_idx[0].item()) + ".png")
+                    plt.clf()
+                except:
+                    print("Failed to visualise predicted", predicted.shape)
 
             #print("out", predicted.shape)
             one_hot_predicted = tm.make_one_hot(predicted, C=len(classes)).byte()
-            assert one_hot_predicted.sum() == total_el_per_batched_class
+            #assert one_hot_predicted.sum() == total_el_per_batched_class // params["batch_size"]
 
             print("in", labels.shape)
             one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), C=len(classes)).byte()
@@ -349,12 +425,14 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
     ## CALCULATE ACCURACIES PER CLASS ##
 
     # Checking got reporting correct
+    """
     assert len(total_conf) == len(total_pred_count)
     assert len(total_conf) == len(testloader)
     assert len(confs) == len(classes)
     assert len(pred_counts) == len(classes)
     assert len(confs[0]) == len(testloader)
     assert len(pred_counts[0]) == len(testloader)
+    """
 
     # Per-class info
     class_correct = torch.sum(correct, (0,2,3), keepdim=False)
@@ -370,6 +448,7 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
     
     # Calc average overall confidence
     average_confidences = []
+    
     for i in range(len(total_conf)):
 
         # Account for training issues
@@ -378,6 +457,7 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
         except ZeroDivisionError:
             print("err")
             this_avg = -1
+        
         average_confidences.append(this_avg)
 
     average_confidence = 100 * sum(average_confidences)/len(average_confidences)
@@ -434,7 +514,11 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
+
+    # limit number for testing- 0 for all
+    number_samples = 5
     
+    params = tm.get_params()
 
     if params["save_run"]:
         experiment_folder = tm.construct_file(params, "data/training_data/")
@@ -442,7 +526,7 @@ if __name__ == "__main__":
         experiment_folder = "no"
 
     ## LOAD DATA ##
-    trainloader, testloader, classes = load_data(params)
+    trainloader, testloader, train_id, test_id, classes = load_h5_data(params, number_samples)
 
     # LOAD MODEL #
     unet = load_model(params, experiment_folder=experiment_folder)

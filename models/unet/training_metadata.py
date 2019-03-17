@@ -7,30 +7,40 @@ import numpy as np
 # TEMP batch_size = 8
 # TEMP epochs = 160000 // 88
 # TEMP every_n was 10
-params = {
-    "scan_location": "data/input_tensors/segmentation_data/datasets/",
-    "epochs" : 1,
-    "lr_0" : 0.0005,
-    "batch_size" : 1,
-    "one_hot": True,
-    "smoothing_type": "uniform_fixed_eps",
-    "label_smoothing" : 0.1,
-    "validation_split" : 0.2,
-    "device" : torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-    "lr_idxs_array": np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95]),
-    "lr_array": np.array([1, 0.5, 0.25, 0.125, 0.015625, 0.00390625, 0.001953125]),
-    "workers" : 4,
-    "voxel_size" : 9,
-    "information": False,
-    "every_n": 1,
-    "num_of_bins": 40
-}
 
-## SAVE THE MODEL ##
-params["save_model"] = True
+def get_params():
 
-## Save the training and test info ##
-params["save_run"] = True
+    params = {
+        "scan_location": "data/input_tensors/segmentation_data/datasets/",
+        "epochs" : 1,
+        "lr_0" : 0.0005,
+        "batch_size" : 1,
+        "one_hot": True,
+        "smoothing_type": "uniform_fixed_eps",
+        "label_smoothing" : 0.1,
+        "validation_split" : 0.2,
+        "device" : torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+        "lr_idxs_array": np.array([0, 0.1, 0.2, 0.5, 0.7, 0.9, 0.95]),
+        "lr_array": np.array([1, 0.5, 0.25, 0.125, 0.015625, 0.00390625, 0.001953125]),
+        "workers" : 4,
+        "voxel_size" : 9,
+        "information": False,
+        "every_n": 1,
+        "num_of_bins": 40
+    }
+
+    ## SAVE THE MODEL ##
+    params["save_model"] = True
+
+    ## Save the training and test info ##
+    params["save_run"] = True
+
+    if "torch" in params["scan_location"]:
+        params["torch"] = True
+    else:
+        params["torch"] = False
+
+    return params
 
 # TODO - transforms - handle the dataset...
 
@@ -437,6 +447,8 @@ def get_aligned_representations(representations, order):
 
     # [epochs, hidden-layers, reps(b,c,x,y)]
     return representations
+
+params = get_params()
 
 if __name__ == "__main__":
 
