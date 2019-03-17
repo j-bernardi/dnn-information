@@ -395,7 +395,18 @@ def make_one_hot(tens, C=9):
         N x C x D x H x W, where C is class number. One-hot encoded.
     '''
     
-    # Clean input
+    # Clean input -CHECK works on torch tensor
+    if type(tens).__name__ == "ndarray":
+        tens = torch.from_numpy(tens).to(params["device"]).long()
+    
+    elif type(tens).__name__ == "Tensor":
+        
+        tens = tens.to(params["device"]).long()
+
+    else:
+
+        raise NotImplementedError("Only implemented for Tensor or ndarray type\nGot " + type(tens).__name__)
+
     tens = torch.tensor(tens, device=params["device"], dtype=torch.long)
 
     if len(tens.shape) == 5:
