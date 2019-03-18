@@ -2,6 +2,6 @@ torch
 torchvision
 numpy
 scipy
-scikit-image
+scikit-learn
 matplotlib
 joblib

@@ -1,2 +1,2 @@
 Accuracy, Experiment
-38.57002258300781,data/initialising/uniform_fixed_eps_lr01_ep1_bs1/
+43.99833679199219,data/initialising/uniform_fixed_eps_lr01_ep1_bs1/
