@@ -397,6 +397,7 @@ def make_one_hot(tens, C=9):
     
     # Clean input -CHECK works on torch tensor
     if type(tens).__name__ == "ndarray":
+        
         tens = torch.from_numpy(tens).to(params["device"]).long()
     
     elif type(tens).__name__ == "Tensor":
@@ -406,8 +407,6 @@ def make_one_hot(tens, C=9):
     else:
 
         raise NotImplementedError("Only implemented for Tensor or ndarray type\nGot " + type(tens).__name__)
-
-    tens = torch.tensor(tens, device=params["device"], dtype=torch.long)
 
     if len(tens.shape) == 5:
         one_hot = torch.cuda.FloatTensor(tens.size(0), C, tens.size(2), tens.size(3), tens.size(4)).zero_()

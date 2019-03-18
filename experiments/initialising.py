@@ -22,8 +22,8 @@ def run_experiment(params, experiment_folder, number_samples=-1, save_reps=False
     # LOAD MODEL with saving reps to folder#
     unet = ts.load_model(params, experiment_folder=fn, save_reps=save_reps)
 
-    # Do training
-    shape, numel, epoch_mean_loss, accuracy_mean_val, training_order =\
+    # Do training - means are per cel
+    out_shape, epoch_mean_loss, accuracy_mean_val, training_order =\
         ts.train(unet, trainloader, params, fake=False, 
                  experiment_folder=fn, torch_data=params["torch"])
 
@@ -40,7 +40,7 @@ def run_experiment(params, experiment_folder, number_samples=-1, save_reps=False
     plt.clf()
 
     # Do test - TODO - implement graph printing here
-    acc = ts.test(unet, testloader, params, shape, numel, classes, 
+    acc = ts.test(unet, testloader, params, out_shape, classes, 
                   experiment_folder=fn, torch_data=params["torch"], save_graph=True)
 
     return fn, acc
@@ -71,17 +71,22 @@ if __name__ == "__main__":
     lr_bs_eps = [(0.01, 4, 12), (0.01, 8, 12), (0.01, 16, 12), 
                                 (0.005, 8, 60),
                                 (0.001, 8, 120)               ]
-
     number_samples = -1 # e.g. all
 
     ### TEMP - for local testing ####
-    do_this = False
-    if do_this:
+    train_local = False
+    test_small_slurm = True
+    if train_local:
         print("************************")
         print("TEMP number of samples 5")
         print("************************")
-        lr_bs_eps = [(0.01, 1, 3)]
+        lr_bs_eps = [(0.01, 1, 1)]#2)]
         number_samples = 5
+    if test_small_slurm:
+        print("*******************")
+        print("TESTING SMALL SCALE")
+        print("*******************")
+        lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
     #############
 
     for tup in lr_bs_eps:

@@ -1,4 +1,4 @@
-import torch, torchvision, os, sys, time, importlib
+import torch, os, sys#, torchvision
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
@@ -9,6 +9,7 @@ import training_metadata as tm
 
 # Import the model
 from unet_models.unet_model2d import UNet2D
+from sklearn.metrics import confusion_matrix as get_confusion_matrix
 
 # TODO - transforms - handle the dataset...
 
@@ -79,10 +80,12 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", torch_d
     if not os.path.exists(reporting_file):
         os.makedirs(reporting_file)
 
-    loss_list = []
+
     # loss and accuracy per epoch
+    loss_list = []
     epoch_mean_loss = []
     accuracy_mean_val = []
+    
     # retains the order of original training images
     train_shuffles = []
 
@@ -104,20 +107,28 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", torch_d
     # epochs #
     for epoch in range(params["epochs"]):
 
-        running_loss, correct = 0.0, 0.0
-        epoch_loss = 0.0
-        total_el = 0
-        total_num = 0
-        this_num = 0
+        # Iteration trackers
+        running_loss, running_number_images = 0.0, 0
+        running_cells_seen = 0
+        
+        # Epoch trackers
+        epoch_loss  = 0.0
+        
+        total_cells_seen, total_cells_correct = 0, 0
+        total_batches_seen, total_images_seen = 0, 0
+
         train_shuffles.append([])
 
+        # Reset for the start of this epoch
         if torch.cuda.device_count() > 1:
             unet.module.reset()
         else:
             unet.reset()
         
+        # ITERATE DATA
         for i, data in enumerate(trainloader, 0):
 
+            # Load the tensors properly
             if torch_data:
                 
                 inputs, labels, original_index = data[0]["image"], data[0]["classes"], data[1]
@@ -127,12 +138,12 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", torch_d
 
                 inputs, labels, weight, original_index = data
                 #print("inputs, labels, weight\n", inputs.shape, labels.shape, weight.shape)
-
-            train_shuffles[epoch].extend(original_index.numpy().tolist())
-
+            
             # Set up input images and labels
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
-            #data['image'].float().to(params["device"]), data['classes'].to(params["device"])
+
+            # Record the ordering
+            train_shuffles[epoch].extend(original_index.numpy().tolist())
 
             optimizer.zero_grad()
 
@@ -159,65 +170,89 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", torch_d
                                                  smoothing_type=params["smoothing_type"], 
                                                  smoothing=params["label_smoothing"])
 
-            # calc accuracy
+            # Get a tensor of the predicted classes
             pred_classes = torch.argmax(outputs.data, dim=1, keepdim=True)
-            
-            #print("Pred classes", pred_classes.shape)
-            #print("labels before", labels.shape)
+    
+            # Put the labels in the same shape            
             shaped_labels = labels.view(labels.size(0), 1, labels.size(1), labels.size(2))
-            #print("Labels after", shaped_labels.shape)
-            
-            correct += torch.eq(pred_classes, shaped_labels.long()).float().sum()
-            total_el += outputs.numel()
-            total_num += outputs.size(0)
-            this_num += outputs.size(0)
 
+            ## RECORD ##
+
+            # Basic accuracy
+            total_cells_correct += torch.eq(pred_classes, shaped_labels.long()).sum().item() # was + .float() instead of item before sum
+            
+            total_cells_seen += outputs.size(0) * outputs.size(2) * outputs.size(3)
+            running_cells_seen += outputs.size(0) * outputs.size(2) * outputs.size(3)
+            
+            # Totals
+            total_images_seen += outputs.size(0)
+            running_number_images += outputs.size(0)
+            total_batches_seen += 1
+            
+            ## UPDATE WEIGHTS ##
             loss.backward()
             optimizer.step()
-                
+
+            # Add losses
             running_loss += loss.item()
             epoch_loss += loss.item()
 
+            # May as well
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            # TEMP
-            if True:
-            #if i % (len(trainloader) // 5) == (len(trainloader) // 5) - 1:
-                print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss))
+            ## RECORD ITERATION INFO ##
+
+            # Do we print this it?
+            print_it = False
+            if len(trainloader) >= 5:
+                if i % (len(trainloader) // 5) == (len(trainloader) // 5) - 1:
+                    print_it = True
+            else:
+                print_it = True
+            
+            # Do the printing
+            if print_it:
+                # Print iteration info
+                print('[%d, %5d] loss / pixel: %.3f' %
+                  (epoch + 1, i + 1, running_loss / running_cells_seen))
                 
+                # Write iteration info to file
                 if reporting_file != "no":
                     with open(reporting_file + "TRAIN.txt", 'a+') as ef:
-                        ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss / this_num))
+                        ef.write("%d,%d,%.3f\n" % (epoch + 1, i + 1, running_loss / running_cells_seen))
 
+                # Reset info
                 running_loss = 0.0
-                this_num = 0
+                running_number_images = 0
 
         ## EPOCH COMPLETE ##
+
+        # Record next epoch
         if torch.cuda.device_count() > 1:
             unet.module.next_epoch()
         else:   
             unet.next_epoch()
 
         ## Track losses / accuracy per epoch ##
-        accuracy = 100*correct/total_el
+        
+        # Accuracy
+        accuracy = 100. * total_cells_correct / total_cells_seen
 
-        epoch_mean_loss.append(epoch_loss / total_num)
+        # Losses - per image
+        epoch_mean_loss.append(epoch_loss / total_cells_seen)
         accuracy_mean_val.append(accuracy)
 
         # Print
-        print('[Epoch %d complete] mean loss: %.3f, accuracy %.3f %%' %
-              (epoch + 1, epoch_loss / total_num, accuracy))
+        print('[Epoch %d complete] mean loss / pixel: %.3f, accuracy %.3f %%' %
+              (epoch + 1, epoch_loss / total_cells_seen, accuracy))
         
         # Save to file
         if reporting_file != "no":
             with open(reporting_file + "TRAIN.txt", 'a+') as ef:
-                ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss, accuracy))
+                ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss / total_cells_seen, accuracy))
 
-        epoch_loss = 0.0
-
-    return outputs.shape, outputs.numel(), epoch_mean_loss, accuracy_mean_val, train_shuffles
+    return outputs.shape, epoch_mean_loss, accuracy_mean_val, train_shuffles
 
 def do_info(unet, training_order, trainloader, params):
     """
@@ -286,47 +321,53 @@ def get_original_order(trainloader):
 
     return X_train, y_one_hot
 
-def test(unet, testloader, params, shape, numel, classes, experiment_folder="no", torch_data=False, save_graph=False):
+def test(unet, testloader, params, shape, classes, experiment_folder="no", torch_data=False, save_graph=False):
     """Test the network."""
 
     print("Testing")
 
+    # Create file if it doesn't exist yet 
     reporting_file = experiment_folder + "reporting/"
     if not os.path.exists(reporting_file):
         os.makedirs(reporting_file)
     
-    # Total cells classified, total correct, the number of batches seen
-    total, total_all_classes, correct_count, num_batches = 0, 0, 0, 0
+    # OVER ALL BATCHES: cells classified, correct, the number of batches seen
+    total_cells_seen = 0
+    total_batches_seen, total_images_seen = 0, 0
 
-    # Total correct of this class in the prediction
-    correct = torch.zeros(shape, device=params["device"], dtype=torch.uint8)
-    false_positive = torch.zeros(shape, device=params["device"], dtype=torch.uint8)
-    false_negative = torch.zeros(shape, device=params["device"], dtype=torch.uint8)
-    correct_not_labelled = torch.zeros(shape, device=params["device"], dtype=torch.uint8)
-
-    total_el_per_batch = numel
-    total_el_per_batched_class = total_el_per_batch // 9
-
-    # The sum of the confidences of prediction per class[0], test[1]
-    confs = np.zeros((len(classes), len(testloader)))
-
-    # The count of the number predicted per class[0], test[1]
-    pred_counts = np.zeros((len(classes), len(testloader)))
+    # Accuracy trackers - total
+    correct, false_positive, false_negative, correct_not_labelled = 0, 0, 0, 0
     
-    # totals per test [0]
-    total_conf = [] 
-    total_pred_count = []
+    # Per-class accuracy trackers
+    class_correct = torch.zeros((shape[1]), device=params["device"], dtype=torch.long)
+    class_false_positive = torch.zeros((shape[1]), device=params["device"], dtype=torch.long)
+    class_false_negative = torch.zeros((shape[1]), device=params["device"], dtype=torch.long)
+    class_correct_not_labelled = torch.zeros((shape[1]), device=params["device"], dtype=torch.long)
 
-    # predicted class tots
+    # Total labels for each class - count
     class_tots = torch.tensor([0] * len(classes), device=params["device"])
     
-    # labelled class tots
-    label_tots = torch.tensor([0] * len(classes), device=params["device"])
-    #class_tots_all_class = torch.tensor([0] * len(classes), device=params["device"])
+    # Total predicted for each class - count
+    predicted_tots = torch.tensor([0] * len(classes), device=params["device"])
 
-    d_count = 0
-    first = True
+    ## CONFIDENCE TRACKING ##
+
+    # totals per test [0]
+    total_confs, total_pred_counts = [], []
+
+    # The sum of the confidences of prediction per class[0], test[1]
+    class_confs = np.zeros((len(classes), len(testloader)))
+
+    # The count of the number predicted per class[0], test[1]
+    class_pred_counts = np.zeros((len(classes), len(testloader)))
+
+    ## ACCURACY MATRIX ##
+    confusion_mat = np.zeros((len(classes), len(classes)), dtype=np.long)
+
     with torch.no_grad():
+        
+        first = True
+
         for data in testloader:
 
             ## GET OUTPUTS ## 
@@ -334,67 +375,40 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
                 inputs, labels, og_idx = data[0]["image"], data[0]["classes"], data[1]
             else:
                 inputs, labels, _, og_idx = data
-            #print("inputs", inputs.shape)
-            #print("labels", labels.shape)
+
             inputs, labels = inputs.float().to(params["device"]), labels.to(params["device"])
-            #data['image'].float().to(params["device"]), data['classes'].to(params["device"])
-        
+
+            total_images_seen += inputs.size(0)
+
+            # Get outputs 
             outputs = unet(inputs)
 
             ## CALCULATE CONFIDENCES and LABELS ## 
-            # predicted is the predicted class for each position - (bs,1,x,y) - same as inputs
             max_conf_matrix, predicted = torch.max(outputs, 1, keepdim=True)
 
-            ## IMAGE is predicted
-
+            ## SAVE first graph for visualising ##
             if save_graph and first:
-                
-                first = False
-                
-                # Save original image
-                try:
-                    print("Image index", og_idx[0])
-                    plt.imshow(torch.squeeze(inputs, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
-                    plt.savefig(reporting_file + "original_image" + str(og_idx[0].item()) + ".png")
-                    plt.clf()
-                except:
-                    print("Failed to visualise inputs", inputs.shape)
 
-                # Save label
-                try:
-                    plt.imshow(labels[0,:,:].cpu().numpy(), cmap="gray")
-                    plt.savefig(reporting_file + "labels" + str(og_idx[0].item()) + ".png")
-                    plt.clf()
-                except:
-                    print("Failed to visualise inputs", labels.shape)
+                save_graphs(inputs, labels, predicted, og_idx, reporting_file)
 
-                # save output
-                try:
-                    # matplotlib to save
-                    plt.imshow(torch.squeeze(predicted, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
-                    #print(predicted)
-                    plt.savefig(reporting_file + "output" + str(og_idx[0].item()) + ".png")
-                    plt.clf()
-                except:
-                    print("Failed to visualise predicted", predicted.shape)
-
-            #print("out", predicted.shape)
+            # Make the predictions and labels one hot
             one_hot_predicted = tm.make_one_hot(predicted, C=len(classes)).byte()
-            #assert one_hot_predicted.sum() == total_el_per_batched_class // params["batch_size"]
-
-            print("in", labels.shape)
             one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), C=len(classes)).byte()
+
+            # Number of cells actually in this class
+            class_tots += torch.sum(one_hot_labels, (0,2,3), keepdim=False)
+            predicted_tots += torch.sum(one_hot_predicted, (0,2,3), keepdim=False)
 
             # The confidences of predicted classes (0s elsewhere - sparse, one-hot rep)
             this_confs = torch.where(one_hot_predicted == 1, outputs, torch.tensor(0., device=params["device"]))
             
-            # The total confidence for this image
-            total_conf.append(this_confs.sum())
-            total_pred_count.append(one_hot_predicted.sum())
+            # The total confidence for this image batch
+            total_confs.append(this_confs.sum())
+            total_pred_counts.append(one_hot_predicted.sum())
 
             for c in range(len(classes)):
-                confs[c, d_count] = torch.sum(this_confs[:,c,:,:]).item()
-                pred_counts[c, d_count] = torch.sum(one_hot_predicted[:,c,:,:]).item()
+                class_confs[c, total_batches_seen] = torch.sum(this_confs[:,c,:,:]).item()
+                class_pred_counts[c, total_batches_seen] = torch.sum(one_hot_predicted[:,c,:,:]).item()
 
             ## CALCULATE CORRECTNESS ##
 
@@ -402,58 +416,69 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
             correct_indicators = one_hot_predicted + one_hot_labels
 
             # 2 if correct positive label
-            correct += correct_indicators.eq(2)#.sum().item()
+            correct_mat = correct_indicators.eq(2)
             # 1 if incorrect - false positive if predicted not labelled
-            false_positive += torch.eq(correct_indicators.eq(1), one_hot_predicted)
+            false_positive_mat = torch.eq(correct_indicators.eq(1), one_hot_predicted)
             # 1 if incorrect - false negative if labelled not predicted
-            false_negative += torch.eq(correct_indicators.eq(1), one_hot_labels)
+            false_negative_mat = torch.eq(correct_indicators.eq(1), one_hot_labels)
             # 0 if correctly not labelled (negative) 
-            correct_not_labelled += correct_indicators.eq(0)
+            correct_not_labelled_mat = correct_indicators.eq(0)
+
+            ## CALCULATE ACCURACIES PER CLASS ##
+
+            # Totals
+            correct += correct_mat.sum().item()
+            false_positive += false_positive_mat.sum().item()
+            false_negative += false_negative_mat.sum().item()
+            correct_not_labelled += correct_not_labelled_mat.sum().item()
+
+            # Per-class info
+            class_correct += torch.sum(correct_mat, (0,2,3), keepdim=False)
+            class_false_positive += torch.sum(false_positive_mat, (0,2,3), keepdim=False)
+            class_false_negative += torch.sum(false_negative_mat, (0,2,3), keepdim=False)
+            class_correct_not_labelled += torch.sum(correct_not_labelled_mat, (0,2,3), keepdim=False)
 
             ## INCREASE TOTALS ##
-            total += outputs[:,0,:,:].numel() # number of cells in this batch
-            total_all_classes += outputs.numel()
-            num_batches += inputs.size(0) # number of batches
-            #print("adding to tots", torch.sum(one_hot_predicted, (0,2,3), keepdim=False))
-            class_tots += torch.sum(one_hot_predicted, (0,2,3), keepdim=False) # number of cells in this class
-        
-            d_count += 1
 
-            for i in range(len(classes)):
-                label_tots[i] += (labels.int() == i).sum().item()
+            # number of cells in this batch item
+            total_cells_seen += outputs.size(0) * outputs.size(2) * outputs.size(3)
+            total_images_seen += outputs.size(0)
+            total_batches_seen += 1
 
-    ## CALCULATE ACCURACIES PER CLASS ##
+            # Update accuracy matrix
+            this_confusion_mat =\
+               get_confusion_matrix(labels.view(-1).cpu().numpy(), 
+                                    predicted.view(-1).cpu().numpy())
 
-    # Checking got reporting correct
-    """
-    assert len(total_conf) == len(total_pred_count)
-    assert len(total_conf) == len(testloader)
-    assert len(confs) == len(classes)
-    assert len(pred_counts) == len(classes)
-    assert len(confs[0]) == len(testloader)
-    assert len(pred_counts[0]) == len(testloader)
-    """
+            print(this_confusion_mat)
 
-    # Per-class info
-    class_correct = torch.sum(correct, (0,2,3), keepdim=False)
-    class_false_positive = torch.sum(false_positive, (0,2,3), keepdim=False)
-    class_false_negative = torch.sum(false_negative, (0,2,3), keepdim=False)
-    class_correct_not_labelled = torch.sum(correct_not_labelled, (0,2,3), keepdim=False)
+            if first:
+                confusion_mat = this_confusion_mat
+            else:
+                confusion_mat += this_confusion_mat
 
-    # calc overall accuracy TODO - check using correct totals
-    overall_accuracy = 100. * (correct.sum().item() / total)
-    overall_false_positive = false_positive.sum()
-    overall_false_negative = false_negative.sum()
-    overall_corr_not_label = correct_not_labelled.sum() # / total_all_classes
-    
+            # Labelling first
+            first = False
+
+    # calc overall accuracy
+    overall_accuracy = 100. * (correct / total_cells_seen)
+
+    # Normalise matrix accuracy
+    row_sums = confusion_mat.sum(axis=1)
+    norm_confusion_mat = confusion_mat / row_sums[:, np.newaxis]
+
+    ## PLOT confusion ##
+    save_confusion(confusion_mat, classes, reporting_file + "confusion_matrix")
+    save_confusion(norm_confusion_mat, classes, reporting_file + "norm_confusion_matrix")
+
     # Calc average overall confidence
     average_confidences = []
-    
-    for i in range(len(total_conf)):
-
-        # Account for training issues
+    for i in range(len(total_confs)):
+        
         try:
-            this_avg = total_conf[i] / total_pred_count[i]
+            # Account for training issue
+            this_avg = total_confs[i] / total_pred_counts[i]
+        
         except ZeroDivisionError:
             print("err")
             this_avg = -1
@@ -465,52 +490,130 @@ def test(unet, testloader, params, shape, numel, classes, experiment_folder="no"
     print("\n*REPORT*\n")
     print("Trained on", len(testloader), "test images.")
     print("Acc: %d%%, AvgConf: %d FPos: %d  FNeg: %d CorrUnlabel: %d\n" %\
-        (overall_accuracy, average_confidence, overall_false_positive, 
-            overall_false_negative, overall_corr_not_label))
+        (overall_accuracy, average_confidence, false_positive, 
+            false_negative, correct_not_labelled))
 
     if reporting_file != "no":
         with open(reporting_file + "TEST.txt", 'a+') as ef:
             ef.write("total,%.3f,%.3f,%d,%d,%d\n" % \
-                (overall_accuracy, average_confidence, overall_false_positive, 
-                 overall_false_negative, overall_corr_not_label))
+                (overall_accuracy, average_confidence, false_positive, 
+                 false_negative, correct_not_labelled))
     
     ## PRINT PER CLASS ## 
-    # test t
     for c in range(len(classes)):
 
         # Try to get accuracy TODO - check using correct sums
         try:
-            this_acc = 100*class_correct[c].item()/class_tots[c].item()
+            this_acc = 100.* class_correct[c].item() / class_tots[c].item()
             this_false_pos = class_false_positive[c].item()
             this_false_neg = class_false_negative[c].item()
-            this_correct_not_label = class_correct_not_labelled[c].item()#/class_tots.sum().item()
+            this_correct_not_label = class_correct_not_labelled[c].item()
         except ZeroDivisionError:
             print("err")
             this_acc, this_false_pos, this_false_neg, this_correct_not_label = -1, -1, -1, -1
         
         # Try to get confidence
         this_avgs = []
-        for t in range(len(confs[c])):
+        for t in range(len(class_confs[c])):
+            
             try:
-                this_conf_avg = confs[c][t] / pred_counts[c][t]
+                this_conf_avg = class_confs[c][t] / class_pred_counts[c][t]
+            
             except ZeroDivisionError:
                 print("err")
                 this_conf = -1
+            
             this_avgs.append(this_conf_avg)
         
-        this_conf = 100 * sum(this_avgs) / len(this_avgs)        
+        this_conf = 100 * sum(this_avgs) / len(this_avgs)
         
         print("%5s Acc: %d%% Conf: %.3f%% FPos: %d FNeg: %d CorrUnLab: %d on %d predicted labels (%d actual)." %\
             (classes[c], this_acc, this_conf, this_false_pos, 
-                this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
+                this_false_neg, this_correct_not_label, predicted_tots[c].item(), class_tots[c]))
 
         if reporting_file != "no":
             with open(reporting_file + "TEST.txt", 'a+') as ef:
                 ef.write("%s,%.3f,%.3f,%d,%d,%d,%d,%d\n" % \
                     (classes[c], this_acc, this_conf, this_false_pos, 
-                    this_false_neg, this_correct_not_label, class_tots[c].item(), label_tots[c]))
+                    this_false_neg, this_correct_not_label, predicted_tots[c].item(), class_tots[c]))
 
     return overall_accuracy
+
+def save_graphs(inputs, labels, predicted, og_idx, reporting_file):
+    """Save the graphs to visualise how well we've done."""
+    try:
+        print("Image index", og_idx[0])
+        plt.imshow(torch.squeeze(inputs, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
+        plt.savefig(reporting_file + "original_image" + str(og_idx[0].item()) + ".png")
+        plt.clf()
+    except:
+        print("Failed to visualise inputs", inputs.shape)
+
+    # Save label
+    try:
+        plt.imshow(labels[0,:,:].cpu().numpy(), cmap="gray")
+        plt.savefig(reporting_file + "labels" + str(og_idx[0].item()) + ".png")
+        plt.clf()
+    except:
+        print("Failed to visualise inputs", labels.shape)
+
+    # save output
+    try:
+        # matplotlib to save
+        plt.imshow(torch.squeeze(predicted, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
+        #print(predicted)
+        plt.savefig(reporting_file + "output" + str(og_idx[0].item()) + ".png")
+        plt.clf()
+    except:
+        print("Failed to visualise predicted", predicted.shape)
+
+    return
+
+def save_confusion(mat, classes, to_file):
+    """Saves matrix plot to file and dumps."""
+
+    mat.dump(to_file + ".pkl")
+
+    fig, ax = plt.subplots()
+    
+    im = ax.imshow(mat, interpolation='nearest', cmap=plt.cm.Blues)
+    
+    ax.figure.colorbar(im, ax=ax)
+
+    if "norm" in to_file:
+        fmt = '.2f'
+        title = "Normalised Confusion Matrix"
+    else:
+        fmt = 'd'
+        title = "Confusion Matrix"
+
+    # We want to show all ticks...
+    ax.set(xticks=np.arange(mat.shape[1]),
+           yticks=np.arange(mat.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
+           title=title,
+           ylabel='Label',
+           xlabel='Prediction')
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    thresh = mat.max() / 2.
+
+    for i in range(mat.shape[0]):
+        for j in range(mat.shape[1]):
+            ax.text(j, i, format(mat[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if mat[i, j] > thresh else "black")
+
+    fig.tight_layout()
+
+    fig.savefig(to_file + ".png")
+
+    return
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
@@ -532,7 +635,7 @@ if __name__ == "__main__":
     unet = load_model(params, experiment_folder=experiment_folder)
 
     ## TRAIN ##
-    shape, numel, epoch_mean_loss, accuracy_mean_val, training_order =\
+    shape, epoch_mean_loss, accuracy_mean_val, training_order =\
         train(unet, trainloader, params, fake=False, experiment_folder=experiment_folder)
 
     if params["save_model"]:
@@ -558,12 +661,13 @@ if __name__ == "__main__":
         print("ITY shape", ITY_array.shape)
         print(ITY_array)
 
+        import importlib
         importlib.reload(plot_information)
 
         plot_information.plot_information_plane(IXT_array, ITY_array, num_epochs=params["epochs"], every_n=params["every_n"])
 
     ## TEST ##
-    acc = test(unet, testloader, params, shape, numel, classes, experiment_folder=experiment_folder)
+    acc = test(unet, testloader, params, shape, classes, experiment_folder=experiment_folder)
 
     if params["save_model"]:
         print("\nSaving model to", experiment_folder + "unet2d_TRAINED.pth")
