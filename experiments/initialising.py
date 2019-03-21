@@ -73,6 +73,7 @@ if __name__ == "__main__":
     lr_bs_eps = [(0.01, 4, 12), (0.01, 8, 12), (0.01, 16, 12), 
                                 (0.005, 8, 60),
                                 (0.001, 8, 120)               ]
+
     number_samples = -1 # e.g. all
 
     ### TEMP - for local testing ####

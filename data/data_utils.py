@@ -31,7 +31,7 @@ class ImdbData(data.Dataset):
     def __len__(self):
         return len(self.y)
 
-def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=4, NumClass=9, chop=True):
+def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=4, NumClass=9, chop=True, clean=True):
 
     classes = ["class" + str(i) for i in range(9)]
 
