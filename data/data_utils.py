@@ -119,6 +119,80 @@ def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=
 
     return (train_loader, val_loader), (train_id, test_id), classes
 
+def h5_to_vis(h5_file="input_tensors/segmentation_data/datasets/", location_to="input_tensors/segmentation_data/visualise_datasets/", weight=False, chop=True, num=0):
+    """Saves h5 file to torch tensors"""
+
+    classes = ["class" + str(i) for i in range(9)]
+
+    # Load DATA
+    Data = h5py.File(h5_file + "Data.h5", 'r')
+    a_group_key = list(Data.keys())[0]
+    Data = list(Data[a_group_key])
+    Data = np.squeeze(np.asarray(Data))
+    
+    # labels
+    Label = h5py.File(h5_file + "label.h5", 'r')
+    a_group_key = list(Label.keys())[0]
+    Label = list(Label[a_group_key])
+    Label = np.squeeze(np.asarray(Label))
+
+    # indexes
+    set = h5py.File(h5_file + "set.h5", 'r')
+    a_group_key = list(set.keys())[0]
+    set = list(set[a_group_key])
+    set = np.squeeze(np.asarray(set))
+    
+    sz = Data.shape
+    print("og sz", sz)
+    
+    print("Data shape", Data.shape)
+    if chop:
+        Data = Data[:, 61:573, :] # WAS: Data = Data[:, :, 61:573, :]?
+    
+    print("Label shape", Label.shape)
+    if chop:
+        weights = Label[:, 1, 61:573, :]
+        Label = Label[:, 0, 61:573, :]
+    else:
+        weights = Label[:, 1, :, :]
+        Label = Label[:, 0, :, :]
+
+    train_id = set == 1
+    test_id = set == 3
+
+    if num > 0:
+        dataset_size = num
+        indices = indices[:num]
+    else:
+        dataset_size = Data.shape[0]
+        indices = list(range(dataset_size))
+
+    Dat = np.array(Data[indices, :, :])
+    Lab = np.array(np.squeeze(Label[indices, :, :]) - 1) # Index from [0-(NumClass-1)]
+
+    import matplotlib.pyplot as plt
+
+    for i in indices:
+
+        if i >= 100:
+            i_str = str(i)
+        elif i >= 10:
+            i_str = "0" + str(i)
+        else:
+            i_str = "00" + str(i)
+
+        plt.figure()
+        plt.imshow(Dat[i,:,:], cmap="gray")
+        plt.savefig(location_to + "img/" + i_str + ".jpg")
+        plt.close()
+        
+        plt.figure()
+        plt.imshow(Lab[i,:,:], cmap="gray")
+        plt.savefig(location_to + "cls/" + i_str + ".jpg")
+        plt.close()
+
+    print("Complete")
+
 class Scan2dDataset(Dataset):
     """
     Retinal scan dataset.
@@ -534,7 +608,7 @@ def segment_tensors(this_input_dir="sample_scans/", classes=15, to_generate=10, 
             
             # make class encoding one-hot
             from models.unet.training_metadata import make_one_hot
-            one_hot = make_one_hot(max_matrix.unsqueeze(0))
+            one_hot = make_one_hot(max_matrix.unsqueeze(0), device)
 
             # save the prediction
             nm = f.split(os.sep)[-1]
@@ -569,8 +643,9 @@ def make_model(model_loc, device, dim=2):
 
 if __name__ == "__main__":
     #print(os.listdir("input_tensors"))
-    #h5_to_torch()
+    h5_to_vis()
 
+    sys.exit()
 
     import matplotlib.pyplot as plt
     (train_loader, val_loader), _, classes = get_imdb_data("input_tensors/segmentation_data/datasets/", batch_size=1, shuffle=True, num=5, chop=True)

@@ -44,8 +44,8 @@ def get_params():
 
 # TODO - transforms - handle the dataset...
 
-def construct_file(params, direct):
-    """Produces file with headers."""
+def construct_file(params, direct, ignore=True):
+    """Produces file with headers. Add to gitignore"""
 
     if direct == "no":
         return "no"
@@ -57,12 +57,13 @@ def construct_file(params, direct):
     if not os.path.exists(direct + file_name):
         os.makedirs(direct + file_name)
 
-    with open(direct + file_name +"DETAILS.txt", 'w') as file:
+    with open(direct + file_name + "DETAILS.txt", 'w') as file:
         for key in params:
             file.write(key + ": " + str(params[key]) + "\n")
 
-    with open(direct + file_name + "../.gitignore", "a+") as gi:
-        gi.write(file_name[:-1] + "\n") # remove the last /
+    if ignore:
+        with open(direct + "/.gitignore", "a+") as gi:
+            gi.write(file_name + "*\n") # remove the last /
 
     return direct + file_name
 
@@ -116,7 +117,7 @@ def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoo
                 (len(gold.shape)))
         
         ## MAKE LABEL ONE HOT ##
-        one_hot = make_one_hot(reshaped_gold, n_class)
+        one_hot = make_one_hot(reshaped_gold, reshaped_gold.device, n_class)
 
         ## APPLY VARIOUS SMOOTHING TYPES to one_hot ##
         if smoothing_type == "uniform_fixed_eps":
@@ -377,7 +378,7 @@ def calc_adj(class_tensor):
 
     return adj_matrix
 
-def make_one_hot(tens, C=9):
+def make_one_hot(tens, to_device, C=9):
     '''
     Converts an integer label torch.autograd.Variable to a one-hot Variable.
     
@@ -398,11 +399,11 @@ def make_one_hot(tens, C=9):
     # Clean input -CHECK works on torch tensor
     if type(tens).__name__ == "ndarray":
         
-        tens = torch.from_numpy(tens).to(params["device"]).long()
+        tens = torch.from_numpy(tens).to(to_device).long()
     
     elif type(tens).__name__ == "Tensor":
         
-        tens = tens.to(params["device"]).long()
+        tens = tens.to(to_device).long()
 
     else:
 
@@ -458,8 +459,6 @@ def get_aligned_representations(representations, order):
     # [epochs, hidden-layers, reps(b,c,x,y)]
     return representations
 
-params = get_params()
-
 if __name__ == "__main__":
 
     """
@@ -472,6 +471,7 @@ if __name__ == "__main__":
 
         adj = calc_adj(labels[0, :, :].cpu().numpy().astype(int))
     """
+    params = get_params()
 
     tst = np.genfromtxt('data/tests/test_matrix.csv', delimiter=',')
     tst = np.array([tst, tst])

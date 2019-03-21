@@ -317,7 +317,7 @@ def get_original_order(trainloader):
     y_train = np.expand_dims(y_train, axis=1)
 
     # y_one_hot = np.concatenate([y_train, 1 - y_train], axis=1) - WAS making it one hot for binary data
-    y_one_hot = tm.make_one_hot(y_train).cpu().numpy()
+    y_one_hot = tm.make_one_hot(y_train, "cpu").cpu().numpy()
 
     return X_train, y_one_hot
 
@@ -392,8 +392,8 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", torch
                 save_graphs(inputs, labels, predicted, og_idx, reporting_file)
 
             # Make the predictions and labels one hot
-            one_hot_predicted = tm.make_one_hot(predicted, C=len(classes)).byte()
-            one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), C=len(classes)).byte()
+            one_hot_predicted = tm.make_one_hot(predicted, params["device"], C=len(classes)).byte()
+            one_hot_labels = tm.make_one_hot(labels.long().view(labels.size(0), 1, labels.size(1), labels.size(2)), params["device"], C=len(classes)).byte()
 
             # Number of cells actually in this class
             class_tots += torch.sum(one_hot_labels, (0,2,3), keepdim=False)
@@ -445,12 +445,12 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", torch
             total_images_seen += outputs.size(0)
             total_batches_seen += 1
 
-            # Update accuracy matrix
+            # Get the confusion matrix
             this_confusion_mat =\
                get_confusion_matrix(labels.view(-1).cpu().numpy(), 
                                     predicted.view(-1).cpu().numpy())
 
-            print(this_confusion_mat)
+            #print(this_confusion_mat)
 
             if first:
                 confusion_mat = this_confusion_mat
@@ -468,6 +468,8 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", torch
     norm_confusion_mat = confusion_mat / row_sums[:, np.newaxis]
 
     ## PLOT confusion ##
+    print("Confusion matrix\n", confusion_mat)
+
     save_confusion(confusion_mat, classes, reporting_file + "confusion_matrix")
     save_confusion(norm_confusion_mat, classes, reporting_file + "norm_confusion_matrix")
 
@@ -543,27 +545,28 @@ def save_graphs(inputs, labels, predicted, og_idx, reporting_file):
     """Save the graphs to visualise how well we've done."""
     try:
         print("Image index", og_idx[0])
+        plt.figure()
         plt.imshow(torch.squeeze(inputs, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
         plt.savefig(reporting_file + "original_image" + str(og_idx[0].item()) + ".png")
-        plt.clf()
+        plt.close()
     except:
         print("Failed to visualise inputs", inputs.shape)
 
     # Save label
     try:
+        plt.figure()
         plt.imshow(labels[0,:,:].cpu().numpy(), cmap="gray")
         plt.savefig(reporting_file + "labels" + str(og_idx[0].item()) + ".png")
-        plt.clf()
+        plt.close()
     except:
         print("Failed to visualise inputs", labels.shape)
 
     # save output
     try:
-        # matplotlib to save
+        plt.figure()
         plt.imshow(torch.squeeze(predicted, dim=1)[0,:,:].cpu().numpy(), cmap="gray")
-        #print(predicted)
         plt.savefig(reporting_file + "output" + str(og_idx[0].item()) + ".png")
-        plt.clf()
+        plt.close()
     except:
         print("Failed to visualise predicted", predicted.shape)
 
@@ -612,6 +615,8 @@ def save_confusion(mat, classes, to_file):
     fig.tight_layout()
 
     fig.savefig(to_file + ".png")
+
+    plt.close(fig)
 
     return
 

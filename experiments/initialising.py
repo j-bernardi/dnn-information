@@ -30,16 +30,18 @@ def run_experiment(params, experiment_folder, number_samples=-1, save_reps=False
     print("Training complete. Saving graphs")
 
     # can plot epoch_mean_loss on epoch for loss change:
+    plt.figure()
     plt.plot(np.arange(len(epoch_mean_loss)), epoch_mean_loss)
     plt.savefig(fn + "epoch_loss.png")
-    plt.clf()
-    
+    plt.close()
+
     # Plot the accuracy on epoch of the validation set
+    plt.figure()
     plt.plot(np.arange(len(accuracy_mean_val)), accuracy_mean_val)
     plt.savefig(fn + "epoch_accuracy.png")
-    plt.clf()
+    plt.close()
 
-    # Do test - TODO - implement graph printing here
+    # Do test
     acc = ts.test(unet, testloader, params, out_shape, classes, 
                   experiment_folder=fn, torch_data=params["torch"], save_graph=True)
 
@@ -75,7 +77,7 @@ if __name__ == "__main__":
 
     ### TEMP - for local testing ####
     train_local = False
-    test_small_slurm = True
+    test_small_slurm = False
     if train_local:
         print("************************")
         print("TEMP number of samples 5")
