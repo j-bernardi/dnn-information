@@ -1,5 +1,5 @@
 """Run experiments to test what parameters should be used."""
-import os, sys
+import os, sys, time
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -70,9 +70,10 @@ if __name__ == "__main__":
     
     ordered_accuracy = []
 
-    lr_bs_eps = [(0.01, 4, 12), (0.01, 8, 12), (0.01, 16, 12), 
-                                (0.005, 8, 60),
-                                (0.001, 8, 120)               ]
+    lr_bs_eps = [(0.01  , 4, 25  ),
+                 (0.001 , 8, 120 ), (0.001, 4, 120),
+                 (0.0005, 4, 200 ),
+                 (0.0001, 4, 1000) ]
 
     number_samples = -1 # e.g. all
 
@@ -101,15 +102,17 @@ if __name__ == "__main__":
         params["lr_0"] = lr
 
         # Run the experiment
+        t_start = time.time()
         filename, test_accuracy = run_experiment(params, experiment_folder, number_samples=number_samples)
-        
+        t_end = time.time()
+
         # Dummy version to check exp is working
         """
         dummy_i *= lr
         filename, test_accuracy = dummy(params, dummy_i)
         """
 
-        ordered_accuracy.append((filename, test_accuracy))
+        ordered_accuracy.append((filename, test_accuracy, t_end-t_start))
 
     # Sort ordered accuracy
     ordered_accuracy = sorted(ordered_accuracy, key=lambda x: x[1])
@@ -120,6 +123,6 @@ if __name__ == "__main__":
     with open(meta_results_file, "w+") as mrf:
         mrf.write("Accuracy, Experiment")
         for l in ordered_accuracy:
-            mrf.write("\n" + str(l[1]) + "," + str(l[0]))
+            mrf.write("\n" + str(l[1]) + "," + str(l[0]) + "," + str(l[2]))
 
     print("Successful completion")

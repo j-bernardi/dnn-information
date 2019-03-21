@@ -55,13 +55,11 @@ def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=
     
     sz = Data.shape
     print("og sz", sz)
-
-    # Add gray channel
-    Data = Data.reshape([sz[0], 1, sz[1], sz[2]])
     
     print("Data shape", Data.shape)
+    
     if chop:
-        Data = Data[:, :, 61:573, :] # WAS: Data = Data[:, :, 61:573, :]?
+        Data = Data[:, 61:573, :] # WAS: Data = Data[:, :, 61:573, :]?
     
     print("Label shape", Label.shape)
     if chop:
@@ -70,6 +68,16 @@ def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=
     else:
         weights = Label[:, 1, :, :]
         Label = Label[:, 0, :, :]
+
+    if clean:
+        print("Cleaning")
+        Data = clean_data(np.squeeze(Data), Label - 1)
+        print("Cleaned", Data.shape)
+
+    sz = Data.shape
+
+    # Add gray channel
+    Data = Data.reshape([sz[0], 1, sz[1], sz[2]])
 
     sz = Label.shape
     Label = Label.reshape([sz[0], 1, sz[1], sz[2]])
@@ -168,6 +176,7 @@ def h5_to_vis(h5_file="input_tensors/segmentation_data/datasets/", location_to="
         indices = list(range(dataset_size))
 
     Dat = np.array(Data[indices, :, :])
+    Clean_Dat = np.array(clean_data(Data[indices, :, :], Label[indices, :, :] - 1))
     Lab = np.array(np.squeeze(Label[indices, :, :]) - 1) # Index from [0-(NumClass-1)]
 
     import matplotlib.pyplot as plt
@@ -184,6 +193,11 @@ def h5_to_vis(h5_file="input_tensors/segmentation_data/datasets/", location_to="
         plt.figure()
         plt.imshow(Dat[i,:,:], cmap="gray")
         plt.savefig(location_to + "img/" + i_str + ".jpg")
+        plt.close()
+
+        plt.figure()
+        plt.imshow(Clean_Dat[i,:,:], cmap="gray")
+        plt.savefig(location_to + "clean_img/" + i_str + ".jpg")
         plt.close()
         
         plt.figure()
@@ -448,6 +462,131 @@ def get_torch_segmentation_data(location, batch_size=8, val_split=0.8, num=0, sh
     classes = ["class" + str(i) for i in range(NumClass)]
 
     return (trainloader, testloader), classes
+
+def clean_data(data, label, prnt=False):
+    """
+    Look and get rid of white lines on the front and back edges.
+    Data goes data[b, y, x]. ALL of it is affected in this way.
+    If data is corrupted, flip in the axis.
+    """
+
+    ## ATTEMPT 2 ##
+
+    # If image is white and label is of the front class, draw randomly from front class that is not white
+    for i in range(data.shape[0]):
+
+        # TODO - determine from the image?
+        first_x, last_x = 150, 362
+
+        # Look at labels where supposed to be associated classes
+        front_labels, back_labels = (label[i] == 0)[:,:first_x], (label[i] == 8)[:,last_x:]
+        #print("num front,back", front_labels.sum(), back_labels.sum())
+
+        # A 1d distribution of cells in the correct class (else -1 flag) for each image
+        front_dist_raw = np.where(front_labels == 1, data[i,:,:first_x], -1.)
+        back_dist_raw = np.where(back_labels == 1, data[i,:,last_x:], -1.)
+        
+        # Delete the non-class values
+        if i == 0 and prnt:
+            print("fdraw, bdraw", front_dist_raw[i].shape, back_dist_raw[i].shape)
+        
+        front_dist_reduced = np.delete(front_dist_raw[i], np.where(front_dist_raw[i] == -1.))
+        back_dist_reduced = np.delete(back_dist_raw[i], np.where(back_dist_raw[i] == -1.))
+        
+        if i == 0 and prnt:
+            print("fdr, bdr", front_dist_reduced.shape, back_dist_reduced.shape)
+
+        # The distribution of non-white cells in the front and back classes
+        front_dist = np.delete(front_dist_reduced, np.where(front_dist_reduced == 1.))
+        back_dist = np.delete(back_dist_reduced, np.where(back_dist_reduced == 1.))
+
+        if i == 0 and prnt:
+            print("fd, bd", front_dist.shape, back_dist.shape)
+
+        # Find the white cells - random each where
+        this_front_data = np.where((data[i,:,:first_x] + front_labels == 2.),
+                                   np.random.choice(front_dist, size=data[i,:,:first_x].shape), 
+                                   data[i,:,:first_x])
+
+        this_back_data = np.where((data[i,:,last_x:] + back_labels == 2.),
+                                  np.random.choice(back_dist, size=data[i,:,last_x:].shape),
+                                  data[i,:,last_x:])
+
+        if i == 0 and prnt:
+            print("fdata, bdata", this_front_data.shape, this_back_data.shape)
+
+        # Concat in x
+        data[i] = np.concatenate((this_front_data, data[i,:,first_x:last_x], this_back_data), axis=(1))
+
+    cnt = []
+
+    for i in range(data.shape[0]):
+        if (data == 1).any():
+            cnt.append(i)
+
+    print("WHITE REMANING AFTER", len(cnt))
+    if prnt:
+        print(cnt)
+
+    return data
+
+def old_clean_data(data, label):
+    """
+    Look and get rid of white lines on the front and back edges.
+    Data goes data[b, y, x]. ALL of it is affected in this way.
+    If data is corrupted, flip in the axis.
+    """
+
+    ## ATTEMPT 2 ##
+
+    # If image is white and label is of the front class, draw randomly from front class that is not white
+
+    # Look at labels where supposed to be associated classes
+    front_labels, back_labels = (label == 0)[:,:,:256], (label == 8)[:,:,256:]
+    print("num front,back", front_labels.sum(), back_labels.sum())
+
+    # A 1d distribution of cells in the correct class (else -1 flag) for each image
+    front_dist_raw = np.reshape(np.where(front_labels == 1, data[:,:,:256], -1.), (front_labels.shape[0],-1))
+    back_dist_raw = np.reshape(np.where(back_labels == 1, data[:,:,256:], -1.), (back_labels.shape[0], -1))
+
+    for i in range(front_dist_raw.shape[0]):
+        
+        # Delete the non-class values
+        if i == 0:
+            print("fdraw, bdraw", front_dist_raw[i].shape, back_dist_raw[i].shape)
+        
+        front_dist_reduced = np.delete(front_dist_raw[i], np.where(front_dist_raw[i] == -1.))
+        back_dist_reduced = np.delete(back_dist_raw[i], np.where(back_dist_raw[i] == -1.))
+        
+        if i == 0:
+            print("fdr, bdr", front_dist_reduced.shape, back_dist_reduced.shape)
+
+        # The distribution of non-white cells in the front and back classes
+        front_dist = np.delete(front_dist_reduced, np.where(front_dist_reduced == 1.))
+        back_dist = np.delete(back_dist_reduced, np.where(back_dist_reduced == 1.))
+
+        if i == 0:
+            print("fd, bd", front_dist.shape, back_dist.shape)
+
+        # Find the white cells - random each where
+        this_front_data = np.where(data[i,:,:256] == 1., np.random.choice(front_dist, size=data[i,:,:256].shape), data[i,:,:256])
+        this_back_data = np.where(data[i,:,256:] == 1., np.random.choice(back_dist, size=data[i,:,256:].shape), data[i,:,256:])
+
+        if i == 0:
+            print("fdata, bdata", this_front_data.shape, this_back_data.shape)
+
+        # Concat in x
+        data[i] = np.concatenate((this_front_data, this_back_data), axis=(1))
+
+    cnt = []
+
+    for i in range(data.shape[0]):
+        if (data == 1).any():
+            cnt.append(i)
+
+    print("COMPROMISED AFTER", len(cnt), "\n", cnt)
+
+    return data
 
 ## RANDOM GENERATION ##
 
