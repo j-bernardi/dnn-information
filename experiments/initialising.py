@@ -25,7 +25,7 @@ def run_experiment(params, experiment_folder, number_samples=-1, save_reps=False
     # Do training - means are per cel
     out_shape, epoch_mean_loss, accuracy_mean_val, training_order =\
         ts.train(unet, trainloader, params, fake=False, 
-                 experiment_folder=fn, torch_data=params["torch"])
+                 experiment_folder=fn)
 
     print("Training complete. Saving graphs")
 
@@ -43,7 +43,7 @@ def run_experiment(params, experiment_folder, number_samples=-1, save_reps=False
 
     # Do test
     acc = ts.test(unet, testloader, params, out_shape, classes, 
-                  experiment_folder=fn, torch_data=params["torch"], save_graph=True)
+                  experiment_folder=fn, save_graph=True)
 
     return fn, acc
 
@@ -56,24 +56,18 @@ if __name__ == "__main__":
     sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
     import train_segment2d as ts
     import training_metadata as tm
-
-    meta_results_file = "data/initialising/metaresults.txt"
-    experiment_folder = "data/initialising/"
     
     # Copy over default parameters        
     params = tm.get_params()
-    print("using data from", params["scan_location"], params["torch"])
     #params["scan_location"] = "data/input_tensors/segmentation_data/datasets/"
     #params["torch"] = False
 
-    #dummy_i = 0.555
-    
-    ordered_accuracy = []
+    print("using data from", params["scan_location"], params["torch"])
 
-    lr_bs_eps = [(0.01  , 4, 25  ),
-                 (0.001 , 8, 120 ), (0.001, 4, 120),
-                 (0.0005, 4, 200 ),
-                 (0.0001, 4, 1000) ]
+    # Time = 
+    lr_bs_eps = [(0.002 , 2, 120 ),
+                 (0.0005, 8, 240 ),
+                 (0.001 , 4, 120 )]
 
     number_samples = -1 # e.g. all
 
@@ -92,37 +86,72 @@ if __name__ == "__main__":
         print("*******************")
         lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
     #############
+    for cln_type in ["loss", "no_clean"]:
 
-    for tup in lr_bs_eps:
+        params["clean"] = cln_type
+
+        print("Running clean type", cln_type)
         
-        lr, bs, e = tup[0], tup[1], tup[2]
+        experiment_folder = "data/initialising_" + cln_type + "/"
+        meta_results_file = experiment_folder + "metaresults.txt"
+        running_file =  experiment_folder + "running.txt"
+        
+        lrs, bss, eps = [], [], [] # for tracking
+        accuracies, accuracies_info = [], []
+        #dummy_i = 0.555
 
-        params["epochs"] = e
-        params["batch_size"] = bs
-        params["lr_0"] = lr
+        if not os.path.exists(experiment_folder):
+            os.makedirs(experiment_folder)
+        
+        for tup in lr_bs_eps:
+            
+            lr, bs, e = tup[0], tup[1], tup[2]
+            print("Running (lr, bs, e) :", tup)
+            params["epochs"] = e
+            params["batch_size"] = bs
+            params["lr_0"] = lr
 
-        # Run the experiment
-        t_start = time.time()
-        filename, test_accuracy = run_experiment(params, experiment_folder, number_samples=number_samples)
-        t_end = time.time()
+            lrs.append(lr)
+            bss.append(bs)
+            eps.append(eps)
 
-        # Dummy version to check exp is working
-        """
-        dummy_i *= lr
-        filename, test_accuracy = dummy(params, dummy_i)
-        """
+            # Run the experiment
+            t_start = time.time()
+            filename, test_accuracy = run_experiment(params, experiment_folder, number_samples=number_samples)
+            t_end = time.time()
 
-        ordered_accuracy.append((filename, test_accuracy, t_end-t_start))
+            # Dummy version to check exp is working
+            """
+            dummy_i *= lr
+            filename, test_accuracy = dummy(params, dummy_i)
+            """
 
-    # Sort ordered accuracy
-    ordered_accuracy = sorted(ordered_accuracy, key=lambda x: x[1])
+            accuracies.append(test_accuracy)
+            accuracies_info.append((filename, test_accuracy, (t_end-t_start)/(60**2)))
 
-    # Print it to a file line by line
-    print("Writing output")
+            # Keep running order
+            with open(running_file, "a+") as rf:
+                rf.write(str(test_accuracy) + "," + str(filename) + "," + str((t_end-t_start)/(60**2)) + "\n")
 
-    with open(meta_results_file, "w+") as mrf:
-        mrf.write("Accuracy, Experiment")
-        for l in ordered_accuracy:
-            mrf.write("\n" + str(l[1]) + "," + str(l[0]) + "," + str(l[2]))
+        # Sort ordered accuracy
+        ordered_accuracy = sorted(accuracies_info, key=lambda x: x[1])
+
+        # Do the random search
+        plt.figure()
+        plt.plot(bss, accuracies)
+        plt.savefig(experiment_folder + "accuracy_on_bs.png")
+        plt.close()
+        plt.figure()
+        plt.plot(lrs, accuracies)
+        plt.savefig(experiment_folder + "accuracy_on_lr.png")
+        plt.close()
+
+        # Print it to a file line by line
+        print("Writing output")
+
+        with open(meta_results_file, "w+") as mrf:
+            mrf.write("Accuracy, Experiment, Time")
+            for l in ordered_accuracy:
+                mrf.write("\n" + str(l[1]) + "," + str(l[0]) + "," + str(l[2]))
 
     print("Successful completion")

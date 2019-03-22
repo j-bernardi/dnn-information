@@ -12,9 +12,12 @@ def get_params():
 
     params = {
         "scan_location": "data/input_tensors/segmentation_data/datasets/",
+        "torch_data": False,
         "epochs" : 1,
         "lr_0" : 0.0005,
         "batch_size" : 1,
+        "clean" : "loss", # 'loss' (0 loss on broken bit), or 'fill' (random dist into image)
+        "chop" : True,
         "one_hot": True,
         "smoothing_type": "uniform_fixed_eps",
         "label_smoothing" : 0.1,
@@ -67,7 +70,7 @@ def construct_file(params, direct, ignore=True):
 
     return direct + file_name
 
-def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoothing=0):
+def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoothing=0, clean="loss"):
     """
     Calc CEL and apply various label smoothings.
     Based on uniform label smoothing here:
@@ -251,11 +254,23 @@ def calc_loss(pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoo
             # If none of the 4 smoothing regimes
             raise NotImplementedError
 
-        ## CALC LOSS ## TODO - verify
+        ## CALC LOSS ##
         log_prb = F.log_softmax(pred, dim=1)
 
-        non_pad_mask = gold.ne(0) # NOT SURE WHAT DOES - JUST COPIED
+        non_pad_mask = gold.ne(0)
+
+        # Either log prob is 0 (e.g. log of 1) or one_hot is 0s
+        # E.g. to symbolise classification was exactly right
         loss = -(one_hot * log_prb).sum(dim=1)
+
+        # SET loss to 0 everywhere that input is 1. and gold is class 0
+        # EG this is where the input was broken
+        if clean == "loss":
+            loss = torch.where(((gold == 0) & (inp == 1.)) | ((gold == 8) & (inp == 1.)), 
+                               torch.tensor(0., device=gold.device, dtype=torch.float), 
+                               loss)
+
+        # LOSS - should this be per pixel, e.g. same shape as output?
         loss = loss.masked_select(non_pad_mask).sum()  # average later
     
     # loss from pred and gold, not one-hot
@@ -396,6 +411,9 @@ def make_one_hot(tens, to_device, C=9):
         N x C x D x H x W, where C is class number. One-hot encoded.
     '''
     
+    # TODO - if class is -1 
+    # Set the one hot to 0s so that there's no loss
+
     # Clean input -CHECK works on torch tensor
     if type(tens).__name__ == "ndarray":
         
@@ -420,6 +438,7 @@ def make_one_hot(tens, to_device, C=9):
         print("Expected 4 or 5 dimensions (N x C x (D) x H x W)")
         raise NotImplementedError
 
+    #target = torch.where(tens.data > 0, one_hot.scatter_(1, tens.data, 1), one_hot.scatter_(1, 0, 1))
     target = one_hot.scatter_(1, tens.data, 1)
     
     # target = Variable(target)
