@@ -1,7 +1,0 @@
-84.76326682350852,data/initialising_no_clean/uniform_fixed_eps_lr01_ep25_bs4/,1163.1608061790466
-71.92143526944247,data/initialising_no_clean/uniform_fixed_eps_lr001_ep120_bs8/,3834.955540418625
-87.44336908513849,data/initialising_no_clean/uniform_fixed_eps_lr001_ep120_bs4/,5439.1547973155975
-70.70511904629794,data/initialising_no_clean/uniform_fixed_eps_lr0005_ep200_bs4/,9046.379827737808
-43.007659912109375,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,30.37305474281311
-63.42506408691406,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.00962691737545861
-4.42657470703125,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.0063870250516467626

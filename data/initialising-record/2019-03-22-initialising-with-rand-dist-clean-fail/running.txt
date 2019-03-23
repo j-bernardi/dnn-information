@@ -1,9 +1,0 @@
-86.52725219726562,data/initialising/uniform_fixed_eps_lr01_ep25_bs4/,1161.8318314552307
-70.89881896972656,data/initialising/uniform_fixed_eps_lr001_ep120_bs8/,3810.0354590415955
-73.39047518643466,data/initialising/uniform_fixed_eps_lr001_ep120_bs4/,5403.586182594299
-70.82347869873047,data/initialising/uniform_fixed_eps_lr0005_ep200_bs4/,8987.254473209381
-tensor(0, device='cuda:0'),data/initialising/uniform_fixed_eps_lr01_ep1_bs1/,26.09113574028015
-tensor(0, device='cuda:0'),data/initialising/uniform_fixed_eps_lr01_ep1_bs1/,26.19334387779236
-22.346878051757812,data/initialising/uniform_fixed_eps_lr01_ep1_bs1/,25.68277335166931
-43.25675964355469,data/initialising/uniform_fixed_eps_lr01_ep1_bs1/,25.819641828536987
-tensor(0, device='cuda:0'),data/initialising/uniform_fixed_eps_lr01_ep1_bs1/,25.77046251296997
