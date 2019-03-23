@@ -1,4 +1,0 @@
-Accuracy, Experiment, Time
-70.71651111949573,data/initialising_no_clean/uniform_fixed_eps_lr001_ep120_bs4/,1.5263717839452955
-90.64336256547408,data/initialising_no_clean/uniform_fixed_eps_lr002_ep60_bs2/,1.6058280211687088
-95.92782800847833,data/initialising_no_clean/uniform_fixed_eps_lr0005_ep240_bs8/,2.1160745597547956
