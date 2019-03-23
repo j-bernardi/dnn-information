@@ -12,8 +12,6 @@ import training_metadata as tm
 from unet_models.unet_model2d import UNet2D
 from sklearn.metrics import confusion_matrix as get_confusion_matrix
 
-# TODO - transforms - handle the dataset...
-
 def load_h5_data(params, number_samples=-1):
 
     # Data handler 
@@ -78,7 +76,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
     """Perform training."""
 
     # Set and create the reporting directory
-    reporting_file = experiment_folder + "reporting/"
+    reporting_file = experiment_folder #+ "reporting/"
     if not os.path.exists(reporting_file):
         os.makedirs(reporting_file)
 
@@ -363,7 +361,7 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
     print("Testing")
 
     # Create file if it doesn't exist yet 
-    reporting_file = experiment_folder + "reporting/"
+    reporting_file = experiment_folder + "test_results/"
     if not os.path.exists(reporting_file):
         os.makedirs(reporting_file)
     
@@ -394,12 +392,10 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
     # The sum of the confidences of prediction per class[0], test[1]
     class_confs = np.zeros((len(classes), len(testloader)))
 
-    # The count of the number predicted per class[0], test[1]
-    class_pred_counts = np.zeros((len(classes), len(testloader)))
-
     ## ACCURACY MATRIX ##
     confusion_mat = np.zeros((len(classes), len(classes)), dtype=np.long)
 
+    ## TESTING ##
     with torch.no_grad():
         
         first = True
@@ -442,7 +438,6 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
 
             for c in range(len(classes)):
                 class_confs[c, total_batches_seen] = torch.sum(this_confs[:,c,:,:]).item()
-                class_pred_counts[c, total_batches_seen] = torch.sum(one_hot_predicted[:,c,:,:]).item()
 
             ## CALCULATE CORRECTNESS ##
 
@@ -502,7 +497,7 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
                       "Correct matrix =", correct_mat.sum().item(),
                       ", cells correct =", cells_correct.sum().item(),
                       "*********************")
-                
+                # Continue
                 #assert correct_mat.sum().item() == cells_correct.sum().item()
 
             # Totals
@@ -548,76 +543,74 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             # Labelling first
             first = False
 
-    # calc overall accuracy
-    overall_accuracy = 100. * (correct / total_cells_seen)
+    ##### ANALYSIS #####
 
-    # Normalise matrix accuracy
-    row_sums = confusion_mat.sum(axis=1)
-    norm_confusion_mat = confusion_mat / row_sums[:, np.newaxis]
+    ## CONFUSION MATRIX ##
 
-    ## PLOT confusion ##
-    print("Confusion matrix\n", confusion_mat)
-
+    # Normalise
+    norm_confusion_mat = confusion_mat / confusion_mat.sum(axis=1)[:, np.newaxis]
+    
+    # Plot 
     save_confusion(confusion_mat, classes, reporting_file + "confusion_matrix")
     save_confusion(norm_confusion_mat, classes, reporting_file + "norm_confusion_matrix")
 
-    # Calc average overall confidence
-    average_confidences = []
-    for i in range(len(total_confs)):
-        
-        try:
-            # Account for training issue
-            this_avg = total_confs[i] / total_pred_counts[i]
-        
-        except ZeroDivisionError:
-            print("err")
-            this_avg = -1
-        
-        average_confidences.append(this_avg)
+    ## OVERALL ACCURACY - ALL CLASSES ##
+    
+    # Total, conventional accuracy
+    overall_accuracy = 100. * (correct / total_cells_seen)
 
-    average_confidence = 100 * sum(average_confidences)/len(average_confidences)
+    # Accuracy excluding edge classes
+    central_accuracy = 100. * class_correct[1:(len(class_correct)-1)].sum().item()\
+                              / class_tots[1:(len(class_tots)-1)].sum().item()
 
-    print("\n*REPORT*\n")
+    try:
+        # Calc overall confidence of the classification
+        average_confidence = sum(total_confs) / sum(total_pred_counts)
+    except ZeroDivisionError:
+        print("Zero division error in total confidence")
+        average_confidence = -1
+
+    # Print to command
+    print("\n*OVERALL REPORT*\n")
     print("Trained on", len(testloader), "test images.")
-    print("Acc: %d%%, AvgConf: %d FPos: %d  FNeg: %d CorrUnlabel: %d\n" %\
-        (overall_accuracy, average_confidence, false_positive, 
+    print("Acc: %d%%, CentralAcc: %d%% AvgConf: %.3f FPos: %d  FNeg: %d CorrUnlabel: %d\n" %\
+        (overall_accuracy, central_accuracy, average_confidence, false_positive, 
             false_negative, correct_not_labelled))
 
+    # Print to file
     if reporting_file != "no":
         with open(reporting_file + "TEST.txt", 'a+') as ef:
-            ef.write("total,%.3f,%.3f,%d,%d,%d\n" % \
-                (overall_accuracy, average_confidence, false_positive, 
+            ef.write("total,%.3f,%.3f,%.3f,%d,%d,%d\n" % \
+                (overall_accuracy, central_accuracy, average_confidence, false_positive, 
                  false_negative, correct_not_labelled))
-    
-    ## PRINT PER CLASS ## 
+
+    ## PRINT ACCURACY PER CLASS ## 
+    print("\n*PER CLASS REPORT*\n")
+    accuracies, confs = [], []
     for c in range(len(classes)):
 
-        # Try to get accuracy TODO - check using correct sums
+        # Accuracy per class
         try:
             this_acc = 100.* class_correct[c].item() / class_tots[c].item()
             this_false_pos = class_false_positive[c].item()
             this_false_neg = class_false_negative[c].item()
             this_correct_not_label = class_correct_not_labelled[c].item()
         except ZeroDivisionError:
-            print("err")
+            print("Zero division error in accuracy")
             this_acc, this_false_pos, this_false_neg, this_correct_not_label = -1, -1, -1, -1
+
+        # Confidence per class
+        try:
+            this_conf = sum(class_confs[c]) / predicted_tots[c].item()
+        except ZeroDivisionError:
+            print("Zero division error in confidence")
+            this_conf = -1
+
+        # Keep a list of the accuracies per class
+        accuracies.append(this_acc)
+        confs.append(this_conf)
         
-        # Try to get confidence
-        this_avgs = []
-        for t in range(len(class_confs[c])):
-            
-            try:
-                this_conf_avg = class_confs[c][t] / class_pred_counts[c][t]
-            
-            except ZeroDivisionError:
-                print("err")
-                this_conf = -1
-            
-            this_avgs.append(this_conf_avg)
-        
-        this_conf = 100 * sum(this_avgs) / len(this_avgs)
-        
-        print("%5s Acc: %d%% Conf: %.3f%% Corr: %d FPos: %d FNeg: %d CorrUnLab: %d on %d predicted labels (%d actual)." %\
+        print("%5s Acc: %d%% Conf: %.3f Corr: %d FPos: %d FNeg: %d CorrUnLab: %d on %d predicted labels (%d actual)." %\
             (classes[c], this_acc, this_conf, class_correct[c], this_false_pos, 
                 this_false_neg, this_correct_not_label, predicted_tots[c].item(), class_tots[c]))
 
@@ -626,6 +619,16 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
                 ef.write("%s,%.3f,%.3f,%d,%d,%d,%d,%d,%d\n" % \
                     (classes[c], this_acc, this_conf, class_correct[c], this_false_pos, 
                     this_false_neg, this_correct_not_label, predicted_tots[c].item(), class_tots[c]))
+
+    ## PRINT EQUAL CONTRIBUTION DATA ##
+    print("\n*EQUAL WEIGHT REPORT*\n")
+    print("Accuracies (equal contribution) %d%%" % (sum(accuracies) / len(accuracies)))
+    print("Confidence (equal contribution) %.3f" % (sum(confs) / len(confs)))
+
+    if reporting_file != "no":
+        with open(reporting_file + "TEST.txt", 'a+') as ef:
+                ef.write("\nEqually weighted accuracies: %.d%%" % (sum(accuracies) / len(accuracies)))
+                ef.write("\nEqually weighted confidence: %.3f\n" % (sum(confs) / len(confs)))
 
     return overall_accuracy
 
@@ -717,11 +720,19 @@ def save_confusion(mat, classes, to_file):
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
     
+    # FIX UP FILES #
     classes = ["class" + str(i) for i in range(9)]
-    mat = np.load("data/2019-03-23-initialising_loss/uniform_fixed_eps_lr001_ep120_bs4/reporting/norm_confusion_matrix.pkl")
     
-    save_confusion(mat, classes, "data/2019-03-23-initialising_loss/uniform_fixed_eps_lr001_ep120_bs4/reporting/norm_confusion_matrix2")
+    experiment = "uniform_fixed_eps_lr001_ep120_bs4"
+    fl = "data/2019-03-23-initialising_loss/" + experiment + "/reporting/norm_confusion_matrix"
+    
+    mat = np.load( fl + ".pkl")
+    
+    save_confusion(mat, classes, fl)
+    
     sys.exit()
+
+    ##
 
     # limit number for testing- 0 for all
     number_samples = 5

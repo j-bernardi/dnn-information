@@ -1,8 +1,0 @@
-40.66429138183594,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.0061691921287112764
-43.86558532714844,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.006070053312513563
-45.479583740234375,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.00599989566538069
-39.96124267578125,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.006023446255260044
-34.06028747558594,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.006598827044169108
-42.425537109375,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.006815121240086026
-45.587921142578125,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.005985822677612305
-42.75550842285156,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.006107585430145264

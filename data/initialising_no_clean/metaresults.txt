@@ -1,2 +1,0 @@
-Accuracy, Experiment, Time
-42.75550842285156,data/initialising_no_clean/uniform_fixed_eps_lr01_ep1_bs1/,0.006107585430145264

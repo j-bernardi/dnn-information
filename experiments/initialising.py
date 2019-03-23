@@ -18,7 +18,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
         ts.train(unet, trainloader, params, fake=False, 
                  experiment_folder=fn)
 
-    print("Training complete. Saving graphs")
+    print("\nTraining complete. Saving graphs")
 
     # can plot epoch_mean_loss on epoch for loss change:
     plt.figure()
@@ -38,11 +38,10 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
 
     return fn, acc
 
-## TODOs - run train segment 1 more time, then run this (on dummy data) to check it works 
-# Then try running on cluster (maybe subset first?)
 
 if __name__ == "__main__":
 
+    # Set up system path
     print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
     sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
     import train_segment2d as ts
@@ -55,13 +54,13 @@ if __name__ == "__main__":
 
     print("using data from", params["scan_location"], params["torch"])
 
-    # Time = 
     lr_bs_eps = [(0.002 , 2, 60  ),
                  (0.0005, 8, 240 ),
                  (0.001 , 4, 120 )]
 
     number_samples = -1 # e.g. all
 
+    #################################
     ### TEMP - for local testing ####
     train_local = True
     test_small_slurm = False
@@ -76,22 +75,23 @@ if __name__ == "__main__":
         print("TESTING SMALL SCALE")
         print("*******************")
         lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
-    #############
+    #################################
 
-    ## LOAD DATA - Same for all now ##
+    ## LOAD DATA - same order for all ##
     if params["torch"]:
         trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
     else:
         trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
 
-    # LOAD MODEL
+    # LOAD MODEL - so that stays same for all #
     model = ts.load_model(params, experiment_folder="no", save_reps=False)
     
-    # Save it so that initialisations can be stored
     if torch.cuda.device_count() > 1:
         torch.save(model.module.state_dict())
     else:
         torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
+
+    ## RUN EXPERIMENT ##
 
     for cln_type in ["loss", "no_clean"]:
 
@@ -144,6 +144,7 @@ if __name__ == "__main__":
             accuracies_info.append((filename, test_accuracy, (t_end-t_start)/(60**2)))
 
             # Keep running order
+            print("Writing output to running results")
             with open(running_file, "a+") as rf:
                 rf.write(str(test_accuracy) + "," + str(filename) + "," + str((t_end-t_start)/(60**2)) + "\n")
 
@@ -169,8 +170,7 @@ if __name__ == "__main__":
         plt.close()
 
         # Print it to a file line by line
-        print("Writing output")
-
+        print("\nWriting output to metaresults")
         with open(meta_results_file, "w+") as mrf:
             mrf.write("Accuracy, Experiment, Time")
             for l in ordered_accuracy:

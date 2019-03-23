@@ -1,9 +1,0 @@
-39.34916594795852,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.0072739299800660875
-34.680157344496095,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006571274664666917
-47.947159174572455,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006683682004610697
-43.94749574033951,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006322173476219177
-41.03536044090115,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.0063549861643049455
-44.4094322556217,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006503072910838657
-43.66814615368435,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006790608167648315
-40.01977323881445,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.00633622494008806
-51.15421022739225,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006529464324315389
