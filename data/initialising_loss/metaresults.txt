@@ -1,2 +1,2 @@
 Accuracy, Experiment, Time
-tensor(0, device='cuda:0'),data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.011052975919511583
+51.15421022739225,data/initialising_loss/uniform_fixed_eps_lr01_ep1_bs1/,0.006529464324315389

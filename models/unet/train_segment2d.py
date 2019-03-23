@@ -3,6 +3,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 
 import training_metadata as tm
 # import plot_information, information_process # TEMP - not needed for now
@@ -25,7 +26,8 @@ def load_h5_data(params, number_samples=-1):
     (trainloader, testloader), (train_id, test_id), classes = get_imdb_data(
         params["scan_location"], val_split=params["validation_split"], 
         num=number_samples, workers=params["workers"], 
-        batch_size=params["batch_size"], chop=params["chop"], clean=params["clean"])
+        batch_size=params["batch_size"], shuffle=params["shuffle"],
+        chop=params["chop"], clean=params["clean"])
 
     # Report
     print("Loaded.")
@@ -183,7 +185,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             ## RECORD ##
 
             # Basic accuracy
-            cells_correct = torch.eq(pred_classes, labels.long())
+            cells_correct = torch.eq(pred_classes, shaped_labels.long())
             cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)
             
             # Remove the cells that are white and of class 0 or 8
@@ -191,18 +193,25 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                 if frst:
                     print("Cleaning by ignoring loss")
                     frst=False
+                
                 # Class 0 - remove white from correct count
-                cells_correct = torch.where((inputs == 1.) & (shaped_labels == 0), 
+                class0_remove = ((inputs == 1.) & (shaped_labels == 0))#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
+                
+                # Class 8 - remove white from correct count
+                class8_remove = (inputs == 1.) & (shaped_labels == 8)#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
+                
+                # Remove from correct counts
+                cells_correct = torch.where(class0_remove == 1, 
                                             torch.tensor(0, device=inputs.device, dtype=torch.uint8),
                                             cells_correct)
-                # Class 8 - remove white from correct count
-                cells_correct = torch.where((inputs == 1.) & (shaped_labels == 8),  
+                
+                cells_correct = torch.where(class8_remove == 1,  
                                             torch.tensor(0, device=inputs.device, dtype=torch.uint8),
                                             cells_correct)
 
                 # remove white from seen count
-                cells_seen -= ((inputs == 1.) & (shaped_labels == 0)).sum().item()
-                cells_seen -= ((inputs == 1.) & (shaped_labels == 8)).sum().item()
+                cells_seen -= (class0_remove).sum().item()
+                cells_seen -= (class8_remove).sum().item()
 
 
             total_cells_correct += cells_correct.sum().item()
@@ -438,31 +447,35 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             ## CALCULATE CORRECTNESS ##
 
             # Basic accuracy
-            cells_correct = torch.eq(predicted, labels.long())
+            cells_correct = torch.eq(predicted, shaped_labels.long())
             cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)
 
             # Remove the cells that are white and of class 0 or 8
             if params["clean"] == "loss":
+
+                class0_remove = ((inputs == 1.) & (shaped_labels == 0))
+                class8_remove = ((inputs == 1.) & (shaped_labels == 8))
+
                 # Class 0 - remove white from correct count
-                cells_correct = torch.where((inputs == 1.) & (shaped_labels == 0), 
+                cells_correct = torch.where(class0_remove == 1,
                                             torch.tensor(0, device=inputs.device, dtype=torch.uint8),
                                             cells_correct)
+
                 # Class 8 - remove white from correct count
-                cells_correct = torch.where((inputs == 1.) & (shaped_labels == 8),  
+                cells_correct = torch.where(class8_remove == 1,
                                             torch.tensor(0, device=inputs.device, dtype=torch.uint8),
                                             cells_correct)
 
                 # remove white from seen count
-                cells_seen -= ((inputs == 1.) & (shaped_labels == 0)).sum()
-                cells_seen -= ((inputs == 1.) & (shaped_labels == 8)).sum()
+                cells_seen -= (class0_remove).sum().item()
+                cells_seen -= (class8_remove).sum().item()
 
-                # Remove blank cells from predictions indicators
-                # Class 0
+                # Class 0 - remove blank cells from predictions indicators
                 one_hot_predicted[:,0,:,:] = torch.where((one_hot_predicted[:,0,:,:] == 1) & (inputs[:,0,:,:] == 1.), 
                                                            torch.tensor(3, device=inputs.device, dtype=torch.uint8), 
                                                            one_hot_predicted[:,0,:,:])
             
-                # Class 8
+                # Class 8 - remove blank cells from predictions indicators
                 one_hot_predicted[:,8,:,:] = torch.where((one_hot_predicted[:,8,:,:] == 1) & (inputs[:,0,:,:] == 1.), 
                                                            torch.tensor(3, device=inputs.device, dtype=torch.uint8), 
                                                            one_hot_predicted[:,8,:,:])
@@ -482,11 +495,15 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             ## CALCULATE ACCURACIES PER CLASS ##
             try:
                 assert correct_mat.sum().item() == cells_correct.sum().item()
+
             except:
-                print("Assertion error.\n" +\
+                
+                print("***Assertion error***\n" +\
                       "Correct matrix =", correct_mat.sum().item(),
-                      ", cells correct =", cells_correct.sum().item())
-                assert correct_mat.sum().item() == cells_correct.sum().item()
+                      ", cells correct =", cells_correct.sum().item(),
+                      "*********************")
+                
+                #assert correct_mat.sum().item() == cells_correct.sum().item()
 
             # Totals
             correct += cells_correct.sum().item()#correct_mat.sum().item()
@@ -648,18 +665,26 @@ def save_confusion(mat, classes, to_file):
 
     mat.dump(to_file + ".pkl")
 
-    fig, ax = plt.subplots()
-    
-    im = ax.imshow(mat, interpolation='nearest', cmap=plt.cm.Blues)
-    
-    ax.figure.colorbar(im, ax=ax)
-
     if "norm" in to_file:
-        fmt = '.2f'
+        fmt   = '.2f'
         title = "Normalised Confusion Matrix"
+        clim  = (0. , 1.)
+        thresh = 0.9
+        col_list = [(0., 'white'), (0.01, 'lightcoral'), (0.1, 'indianred'), (0.8, 'lightgreen'), (1., 'green')]
+        #col_list = [(0., 'white'), (0.01, 'r'), (0.05, 'coral'), (0.1, 'gold'), (0.2, 'g'), (1., 'b')]
+        cmap = colors.LinearSegmentedColormap.from_list('show_confusion', col_list, N=256, gamma=1.0)
     else:
+        clim  = (0. , mat.max())
         fmt = 'd'
         title = "Confusion Matrix"
+        cmap = plt.cm.Blues
+        thresh = mat.max() / 2.
+
+    fig, ax = plt.subplots()
+
+    im = ax.imshow(mat, interpolation='nearest', cmap=cmap, clim=clim)
+    
+    ax.figure.colorbar(im, ax=ax)
 
     # We want to show all ticks...
     ax.set(xticks=np.arange(mat.shape[1]),
@@ -675,8 +700,6 @@ def save_confusion(mat, classes, to_file):
              rotation_mode="anchor")
 
     # Loop over data dimensions and create text annotations.
-    thresh = mat.max() / 2.
-
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):
             ax.text(j, i, format(mat[i, j], fmt),
@@ -693,6 +716,12 @@ def save_confusion(mat, classes, to_file):
 
 if __name__ == "__main__":
     # We have neither used dropout nor weight decay
+    
+    classes = ["class" + str(i) for i in range(9)]
+    mat = np.load("data/2019-03-23-initialising_loss/uniform_fixed_eps_lr001_ep120_bs4/reporting/norm_confusion_matrix.pkl")
+    
+    save_confusion(mat, classes, "data/2019-03-23-initialising_loss/uniform_fixed_eps_lr001_ep120_bs4/reporting/norm_confusion_matrix2")
+    sys.exit()
 
     # limit number for testing- 0 for all
     number_samples = 5

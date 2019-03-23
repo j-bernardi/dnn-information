@@ -1,5 +1,5 @@
 """Run experiments to test what parameters should be used."""
-import os, sys, time
+import os, sys, time, torch
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -8,19 +8,10 @@ def dummy(params, i):
 
     return tm.construct_file(params), i
 
-def run_experiment(params, experiment_folder, number_samples=-1, save_reps=False):
+def run_experiment(unet, params, trainloader, testloader, classes, experiment_folder, number_samples=-1, save_reps=False):
 
     # Get save file name for this given experiment
     fn = tm.construct_file(params, experiment_folder)
-
-    ## LOAD DATA ##
-    if params["torch"]:
-        trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
-    else:
-        trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
-
-    # LOAD MODEL with saving reps to folder#
-    unet = ts.load_model(params, experiment_folder=fn, save_reps=save_reps)
 
     # Do training - means are per cel
     out_shape, epoch_mean_loss, accuracy_mean_val, training_order =\
@@ -65,14 +56,14 @@ if __name__ == "__main__":
     print("using data from", params["scan_location"], params["torch"])
 
     # Time = 
-    lr_bs_eps = [(0.002 , 2, 120 ),
+    lr_bs_eps = [(0.002 , 2, 60  ),
                  (0.0005, 8, 240 ),
                  (0.001 , 4, 120 )]
 
     number_samples = -1 # e.g. all
 
     ### TEMP - for local testing ####
-    train_local = False
+    train_local = True
     test_small_slurm = False
     if train_local:
         print("************************")
@@ -86,8 +77,25 @@ if __name__ == "__main__":
         print("*******************")
         lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
     #############
+
+    ## LOAD DATA - Same for all now ##
+    if params["torch"]:
+        trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
+    else:
+        trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
+
+    # LOAD MODEL
+    model = ts.load_model(params, experiment_folder="no", save_reps=False)
+    
+    # Save it so that initialisations can be stored
+    if torch.cuda.device_count() > 1:
+        torch.save(model.module.state_dict())
+    else:
+        torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
+
     for cln_type in ["loss", "no_clean"]:
 
+        ## Set up the experiment with data cleaning ##
         params["clean"] = cln_type
 
         print("Running clean type", cln_type)
@@ -100,10 +108,15 @@ if __name__ == "__main__":
         accuracies, accuracies_info = [], []
         #dummy_i = 0.555
 
+        # Make file
         if not os.path.exists(experiment_folder):
             os.makedirs(experiment_folder)
         
+        # Do the hyperparameter search
         for tup in lr_bs_eps:
+
+            unet = ts.load_model(params, experiment_folder="no", save_reps=False)
+            unet.load_state_dict(torch.load("models/unet/saved_models/initialisation.pth"))
             
             lr, bs, e = tup[0], tup[1], tup[2]
             print("Running (lr, bs, e) :", tup)
@@ -117,7 +130,8 @@ if __name__ == "__main__":
 
             # Run the experiment
             t_start = time.time()
-            filename, test_accuracy = run_experiment(params, experiment_folder, number_samples=number_samples)
+            filename, test_accuracy = run_experiment(unet, params, trainloader, testloader, classes, 
+                                                     experiment_folder, number_samples=number_samples)
             t_end = time.time()
 
             # Dummy version to check exp is working
@@ -135,12 +149,20 @@ if __name__ == "__main__":
 
         # Sort ordered accuracy
         ordered_accuracy = sorted(accuracies_info, key=lambda x: x[1])
-
-        # Do the random search
+        
+        # Plot batch size on accuracy
+        bs_accuracies = [x for _, x in sorted(zip(bss, accuracies))]
+        bs_bss = sorted(bss)
+        
         plt.figure()
         plt.plot(bss, accuracies)
         plt.savefig(experiment_folder + "accuracy_on_bs.png")
         plt.close()
+
+        # Plot LR on accuracy
+        lr_accuracies = [x for _, x in sorted(zip(lrs, accuracies))]
+        lrs = sorted(lrs)
+        
         plt.figure()
         plt.plot(lrs, accuracies)
         plt.savefig(experiment_folder + "accuracy_on_lr.png")
