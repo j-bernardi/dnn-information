@@ -18,7 +18,7 @@ def get_params():
         "batch_size" : 1,
         "clean" : "loss", # 'loss' (0 loss on broken bit), or 'fill' (random dist into image)
         "chop" : True,
-        "shuffle": False,
+        "shuffle": False, # same order for good experiment
         "one_hot": True,
         "smoothing_type": "uniform_fixed_eps",
         "label_smoothing" : 0.1,

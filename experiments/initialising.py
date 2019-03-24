@@ -26,16 +26,18 @@ def initialise_model(params):
             model = ts.load_model(params, experiment_folder="no", save_reps=False)
             torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
 
-def define_experiment(test_small_slurm=False):
+def define_experiment(test_small_slurm=True):
+
+    cln_types = ["loss", "no_clean"]
 
     lr_bs_eps = [(0.001 , 4, 120 ),
-                 (0.0008, 8, 140 ),
-                 (0.0012, 5, 100 ),
-                 (0.0011, 6, 110 )]
+                 (0.0008, 8, 180 ),
+                 (0.0009, 6, 100 ),
+                 (0.0012, 4, 100 ),
+                 (0.0005, 8, 240 ),
+                 (0.0015, 2, 60  )]
 
     number_samples = -1 # e.g. all
-
-    cln_types = ["no_clean"]#, "no_clean"]
 
     # For local testing:
     train_local = (torch.cuda.device_count() <= 1)
@@ -46,7 +48,7 @@ def define_experiment(test_small_slurm=False):
         print("TEMP number of samples 5")
         print("************************")
         
-        lr_bs_eps = [(0.02, 1, 1), (0.002, 1, 1)]#2)]
+        lr_bs_eps = [(0.02, 1, 1)]#, (0.002, 1, 1)]#2)]
         number_samples = 5
     
     # If doing small slurm
@@ -56,7 +58,7 @@ def define_experiment(test_small_slurm=False):
         print("TESTING SMALL SCALE")
         print("*******************")
 
-        lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
+        lr_bs_eps = [(0.01, 2, 2), (0.005, 4, 2)]
 
     return lr_bs_eps, number_samples, cln_types
 
@@ -120,7 +122,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
 
     return fn, acc, central_acc
 
-def make_plot(x, y, title):
+def make_plot(x, y, acc_type, title):
     """Makes an ordered plot of y on x."""
     
     ordered_y = [i for _, i in sorted(zip(x, y))]
@@ -132,23 +134,23 @@ def make_plot(x, y, title):
     plt.title("Accuracy on " + title)
     plt.xlabel(title)
     plt.ylabel("Accuracy")
-    plt.savefig(experiment_folder + "accuracy_on " + title.lower().replace(" ", "_") + ".png")
+    plt.savefig(experiment_folder + acc_type+ "_accuracy_on" + title.lower().replace(" ", "_") + ".png")
     plt.close()
 
-def make_heat_map(lrs, bss, central_accuracies):
+def make_heat_map(lrs, bss, accuracies, title):
 
     plt.figure()
-    sc = plt.scatter(lrs, bss, c=central_accuracies, s=250, 
+    sc = plt.scatter(lrs, bss, c=accuracies, s=250, 
                      cmap=plt.cm.get_cmap('RdYlBu'), 
-                     clim=(min(central_accuracies), max(central_accuracies)))
+                     clim=(min(accuracies), max(accuracies)))
 
     plt.colorbar(sc)
-    plt.title("Parameter grid search - central accuracies")
+    plt.title("Parameter grid search - " + title.lower())
     plt.xlabel("LR_0")
     plt.xlim((0, 0.02))
     plt.ylabel("Batch Size")
     plt.ylim((0, 10))
-    plt.savefig(experiment_folder + "random_grid.png")
+    plt.savefig(experiment_folder + title.lower().replace(" ", "_") + "_grid.png")
     plt.close()
 
 if __name__ == "__main__":
@@ -170,19 +172,18 @@ if __name__ == "__main__":
     # Load up the experiment we want to run
     lr_bs_eps, number_samples, cln_types = define_experiment()
 
-    ## LOAD DATA - same order for all ##
-    if params["torch"]:
-        trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
-    else:
-        trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
-
     # Save a model if one doesn't already exist
     initialise_model(params)
+
+    print("Initialisation time %.3f secs" % (time.time() - TIME_TOTAL))
     
     ## RUN EXPERIMENT ##
     for cln_type in cln_types:
+        
+        t_clean = time.time()
 
         print("\nRunning clean type", cln_type)
+        
         params["clean"] = cln_type
 
         experiment_folder = "data/initialising_" + cln_type + "/"
@@ -211,17 +212,27 @@ if __name__ == "__main__":
         with open(running_file, "w+") as rf:
             rf.write("Central, Accuracy, Experiment,   Time\n")
         
+        print("This clean type initialisation time %.3f secs" % (time.time() - t_clean))
+
         # Do the hyperparameter search
         for (lr, bs, e) in lr_bs_eps:
 
             print("\nStarting at", datetime.datetime.now(), "with lr", lr, "- bs", bs, "- epochs", e, "\n")
+            TIME_RUN = time.time()
 
-            # Load fresh model
-            unet = load_fresh_model(params)
-            
             # Define params
             params["epochs"], params["batch_size"], params["lr_0"] = e, bs, lr
 
+            ## LOAD DATA - same order for all ##
+            if params["torch"]:
+                trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
+            else:
+                trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
+
+            # Load fresh model
+            unet = load_fresh_model(params)
+
+            ####################
             # Run the experiment
             t_start = time.time()
             
@@ -231,12 +242,15 @@ if __name__ == "__main__":
 
             t_end = time.time()
 
-            # Record for graph plotting
+            print("Training complete in %.3f hrs" % ((t_end-t_start)/(60**2)))
+            ####################
+
+            # Record outputs for graph plotting
             lrs.append(lr), bss.append(bs), eps.append(e)
 
             accuracies.append(test_accuracy)
             central_accuracies.append(central_acc)
-            accuracies_info.append((central_acc, test_accuracy, filename, (t_end-t_start)/(60**2), ))
+            accuracies_info.append((central_acc, test_accuracy, filename, (t_end-t_start)/(60**2)))
 
             # Record info to file
             print("\nWriting output to running results")
@@ -249,20 +263,22 @@ if __name__ == "__main__":
 
             ## Make running plots - overwrite old ones ##
 
-            make_plot(bss, accuracies, "Batch Size")
-            make_plot(lrs, accuracies, "Learning Rate_0")
+            make_plot(bss, accuracies, "Total", "Batch Size")
+            make_plot(bss, central_accuracies, "Central", "Batch Size")
+            make_plot(lrs, accuracies, "Total", "Learning Rate_0")
+            make_plot(lrs, central_accuracies, "Central", "Learning Rate_0")
 
             # PLOT PARAMETER SEARCH GRID
-            make_heat_map(lrs, bss, central_accuracies)
+            make_heat_map(lrs, bss, central_accuracies, "central accuracy")
+            make_heat_map(lrs, bss, accuracies, "total accuracy")
 
             print("Completed run at", datetime.datetime.now())
+            print("Time for run %.3f hrs" % ((time.time() - TIME_RUN) / (60**2)))
 
         ## ANALYSIS ##
 
         # Sort ordered accuracy
         ordered_accuracy = sorted(accuracies_info, key=lambda x: x[1])
-
-        TIME_TOTAL = time.time() - TIME_TOTAL
 
         # Print it to a file line by line
         print("\nWriting output to metaresults")
@@ -273,4 +289,4 @@ if __name__ == "__main__":
             #mrf.write("\nTIME TO COMPLETION: %.3f" % (TIME_TOTAL / (60**2)))
 
     print("Successful completion")
-    print("Completed in %.3f hours" % (TIME_TOTAL / (60**2)))
+    print("Completed in %.3f hours" % ((time.time() - TIME_TOTAL) / (60**2)))

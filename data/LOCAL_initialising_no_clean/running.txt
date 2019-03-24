@@ -1,0 +1,2 @@
+Central, Accuracy, Experiment,   Time
+27.257, 12.873, data/LOCAL_initialising_no_clean/uniform_fixed_eps_lr02_ep1_bs1/, 0.006

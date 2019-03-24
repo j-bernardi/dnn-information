@@ -1,4 +1,4 @@
-import torch, os, sys#, torchvision
+import torch, os, sys, datetime, time#, torchvision
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
@@ -86,6 +86,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
     epoch_mean_loss = []
     accuracy_mean_val = []
     central_accuracy_mean_val = []
+    times = [time.time()]
     frst = True
     
     # retains the order of original training images
@@ -127,9 +128,17 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             unet.module.reset()
         else:
             unet.reset()
+
+        # 1. Resetting
+        if frst:
+            times.append(time.time() - times[-1])
         
         # ITERATE DATA
         for i, data in enumerate(trainloader, 0):
+
+            # 2. Enumerating
+            if frst:
+                times.append(time.time() - times[-1])
 
             # Load the tensors properly
             if params["torch_data"]:
@@ -151,7 +160,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             optimizer.zero_grad()
 
             # adjust lr over iterations
-            if i * epoch == idxs[next_idx]:
+            if total_images_seen * epoch == idxs[next_idx]:
                 print("UPDATING LR", lrs[next_idx])
                 # update the learning rate
                 for g in optimizer.param_groups:
@@ -162,8 +171,16 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                 else:
                     next_idx = 0
 
+            # Data prep
+            if frst:
+                times.append(time.time() - times[-1])
+
             # Get this batch's outputs - probabilities over 9 classes
             outputs = unet(inputs)
+
+            # 3. Output
+            if frst:
+                times.append(time.time() - times[-1])
 
             # Skip the actual training if desired [for testing]
             if fake:
@@ -175,6 +192,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                                 smoothing_type=params["smoothing_type"], 
                                 smoothing=params["label_smoothing"],
                                 clean=params["clean"])
+
+            # 4. loss
+            if frst:
+                times.append(time.time() - times[-1])
 
             # Get a tensor of the predicted classes
             pred_classes = torch.argmax(outputs.data, dim=1, keepdim=True)
@@ -238,6 +259,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             running_number_images += outputs.size(0)
             total_batches_seen += 1
             
+            # 5. Cleaning    
+            if frst:
+                times.append(time.time() - times[-1])
+
             ## UPDATE WEIGHTS ##
             loss.backward()
             optimizer.step()
@@ -246,9 +271,17 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             running_loss += loss.item()
             epoch_loss += loss.item()
 
+            # 6. Backprop 
+            if frst:
+                times.append(time.time() - times[-1])
+
             # May as well
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+
+            # 7. Clear cache
+            if frst:
+                times.append(time.time() - times[-1])
 
             ## RECORD ITERATION INFO ##
 
@@ -296,9 +329,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
         central_accuracy_mean_val.append(central_accuracy)
 
         # Print
-        print('[Epoch %d complete] mean loss / pixel: %.3f, accuracy %.3f %%' %
-              (epoch + 1, epoch_loss / total_cells_seen, accuracy))
-        
+        print('[Epoch %d complete] mean loss / pixel: %.3f, accuracy %.3f%%, dt %s' %
+              (epoch + 1, epoch_loss / total_cells_seen, accuracy, datetime.datetime.now()))
+        if frst:
+            print("TIME STEPS", times[:8])
         # Save to file
         if reporting_file != "no":
             with open(reporting_file + "TRAIN.txt", 'a+') as ef:

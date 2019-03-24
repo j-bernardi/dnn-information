@@ -1,0 +1,148 @@
+Changed directory to /home/jhb57/dnn-information.
+
+JobID: 10226289
+======
+Time: Sun 24 Mar 14:24:51 GMT 2019
+Running on master node: gpu-e-2
+Current directory: /home/jhb57/dnn-information
+
+Nodes allocated:
+================
+gpu-e-2
+
+numtasks=4, numnodes=1, mpi_tasks_per_node=4 (OMP_NUM_THREADS=1)
+
+Executing command:
+==================
+python /home/jhb57/dnn-information/experiments/initialising.py 
+
+Script started at 2019-03-24 14:24:59.287347
+appending /home/jhb57/dnn-information/models/unet
+*******************
+TESTING SMALL SCALE
+*******************
+Appending /home/jhb57/dnn-information
+Loading images
+Data shape (110, 768, 512)
+Label shape (110, 2, 768, 512)
+No cleaning in data load
+Loaded.
+len trainset 88
+len testset 22
+Initialisation time 8.510 secs
+
+Running clean type loss
+No previous experiments found.
+This clean type initialisation time 0.015 secs
+
+Starting at 2019-03-24 14:25:07.811877 with lr 0.01 - bs 2 - epochs 2 
+
+Info layers numbers [0, 6, 12, 18, 24, 30, 36, 42, 48, 54]
+Let's use 4 GPUs!
+Moving model to cuda:0
+Starting training.
+UPDATING LR 0.01
+Cleaning by ignoring loss
+[1,    17] loss / pixel: 1.47176
+[1,    34] loss / pixel: 1.13329
+[1,    51] loss / pixel: 0.94194
+[1,    68] loss / pixel: 0.82606
+[1,    85] loss / pixel: 0.66836
+[Epoch 1 complete] mean loss / pixel: 0.995, accuracy 66.155 %
+[2,    17] loss / pixel: 0.61800
+UPDATING LR 0.005
+[2,    34] loss / pixel: 0.55896
+UPDATING LR 0.0025
+[2,    51] loss / pixel: 0.56602
+[2,    68] loss / pixel: 0.56418
+[2,    85] loss / pixel: 0.54786
+[Epoch 2 complete] mean loss / pixel: 0.570, accuracy 82.247 %
+
+Training complete. Saving graphs
+Testing
+Image index tensor(0)
+
+*OVERALL REPORT*
+
+Trained on 22 test images.
+Acc: 81%, CentralAcc: 63% AvgConf: 1.916 FPos: 46131663  FNeg: 46143025 CorrUnlabel: 44841360
+
+
+*PER CLASS REPORT*
+
+class0 Acc: 49% Conf: 1.435 Corr: 772865 FPos: 4198641 FNeg: 4991638 CorrUnLab: 4195993 on 775530 predicted labels (1568527 actual).
+class1 Acc: 70% Conf: 3.057 Corr: 80788 FPos: 5652759 FNeg: 5613199 CorrUnLab: 5579578 on 153969 predicted labels (114409 actual).
+class2 Acc: 70% Conf: 2.452 Corr: 166786 FPos: 5531474 FNeg: 5414060 CorrUnLab: 5345152 on 353108 predicted labels (235694 actual).
+class3 Acc: 45% Conf: 1.850 Corr: 46697 FPos: 5664745 FNeg: 5398419 CorrUnLab: 5342693 on 368749 predicted labels (102423 actual).
+class4 Acc: 12% Conf: 2.111 Corr: 13861 FPos: 5659680 FNeg: 5728568 CorrUnLab: 5634941 on 38600 predicted labels (107488 actual).
+class5 Acc: 84% Conf: 2.935 Corr: 279472 FPos: 5435496 FNeg: 5251949 CorrUnLab: 5199749 on 515219 predicted labels (331672 actual).
+class6 Acc: 53% Conf: 2.434 Corr: 53478 FPos: 5667936 FNeg: 5673311 CorrUnLab: 5627557 on 93857 predicted labels (99232 actual).
+class7 Acc: 49% Conf: 1.768 Corr: 41304 FPos: 5683901 FNeg: 5453206 CorrUnLab: 5411243 on 313962 predicted labels (83267 actual).
+class8 Acc: 96% Conf: 1.757 Corr: 3005979 FPos: 2637031 FNeg: 2618675 CorrUnLab: 2504454 on 3154174 predicted labels (3124456 actual).
+
+*EQUAL WEIGHT REPORT*
+
+Accuracies (equal contribution) 59%
+Confidence (equal contribution) 2.200
+Training complete in 0.170 hrs
+
+Writing output to running results
+Completed run at 2019-03-24 14:35:29.023560
+Time for run 0.173 hrs
+
+Starting at 2019-03-24 14:35:29.023582 with lr 0.005 - bs 4 - epochs 2 
+
+Info layers numbers [0, 6, 12, 18, 24, 30, 36, 42, 48, 54]
+Let's use 4 GPUs!
+Moving model to cuda:0
+Starting training.
+UPDATING LR 0.005
+Cleaning by ignoring loss
+[1,    17] loss / pixel: 1.45973
+[1,    34] loss / pixel: 1.23536
+[1,    51] loss / pixel: 1.08733
+[1,    68] loss / pixel: 1.01219
+[1,    85] loss / pixel: 0.88945
+[Epoch 1 complete] mean loss / pixel: 1.126, accuracy 73.132 %
+[2,    17] loss / pixel: 0.80395
+UPDATING LR 0.0025
+[2,    34] loss / pixel: 0.72628
+UPDATING LR 0.00125
+[2,    51] loss / pixel: 0.69580
+[2,    68] loss / pixel: 0.67608
+[2,    85] loss / pixel: 0.68115
+[Epoch 2 complete] mean loss / pixel: 0.716, accuracy 85.575 %
+
+Training complete. Saving graphs
+Testing
+Image index tensor(0)
+
+*OVERALL REPORT*
+
+Trained on 22 test images.
+Acc: 81%, CentralAcc: 59% AvgConf: 1.417 FPos: 46128962  FNeg: 46145726 CorrUnlabel: 44861029
+
+
+*PER CLASS REPORT*
+
+class0 Acc: 55% Conf: 1.290 Corr: 872104 FPos: 4195723 FNeg: 4865344 CorrUnLab: 4190081 on 904742 predicted labels (1568527 actual).
+class1 Acc: 52% Conf: 1.520 Corr: 60241 FPos: 5652759 FNeg: 5584895 CorrUnLab: 5530727 on 182273 predicted labels (114409 actual).
+class2 Acc: 64% Conf: 2.112 Corr: 153079 FPos: 5531474 FNeg: 5407338 CorrUnLab: 5324723 on 359830 predicted labels (235694 actual).
+class3 Acc: 36% Conf: 1.927 Corr: 37708 FPos: 5664745 FNeg: 5587288 CorrUnLab: 5522573 on 179880 predicted labels (102423 actual).
+class4 Acc: 29% Conf: 1.582 Corr: 31234 FPos: 5659680 FNeg: 5640976 CorrUnLab: 5564722 on 126192 predicted labels (107488 actual).
+class5 Acc: 73% Conf: 2.239 Corr: 243320 FPos: 5435496 FNeg: 5184453 CorrUnLab: 5096101 on 582715 predicted labels (331672 actual).
+class6 Acc: 68% Conf: 1.650 Corr: 67568 FPos: 5667936 FNeg: 5535527 CorrUnLab: 5503863 on 231641 predicted labels (99232 actual).
+class7 Acc: 55% Conf: 1.832 Corr: 46060 FPos: 5683901 FNeg: 5657294 CorrUnLab: 5620087 on 109874 predicted labels (83267 actual).
+class8 Acc: 94% Conf: 1.144 Corr: 2952769 FPos: 2637248 FNeg: 2682611 CorrUnLab: 2508152 on 3090021 predicted labels (3124456 actual).
+
+*EQUAL WEIGHT REPORT*
+
+Accuracies (equal contribution) 58%
+Confidence (equal contribution) 1.700
+Training complete in 0.168 hrs
+
+Writing output to running results
+Completed run at 2019-03-24 14:45:34.111053
+Time for run 0.168 hrs
+
+Writing output to metaresults
