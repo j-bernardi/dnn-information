@@ -1,12 +1,76 @@
 """Run experiments to test what parameters should be used."""
-import os, sys, time, torch
+import os, sys, time, torch, datetime, pickle
 import matplotlib.pyplot as plt
 import numpy as np
 
-def dummy(params, i):
-    """Pretend run"""
+def initialise_model(params):
+    """If no model exists, create one and save it for all."""
 
-    return tm.construct_file(params), i
+    if torch.cuda.device_count() > 1:
+        
+        # Multi gpu - check if multi file exists
+        if os.path.isfile('models/unet/saved_models/initialisation_multi.pth'):
+            pass # Will load this later
+        
+        else:
+            print("Making new model (multi gpu)") # Make the model and save it
+            model = ts.load_model(params, experiment_folder="no", save_reps=False)
+            torch.save(model.module.state_dict(), "models/unet/saved_models/initialisation_multi.pth")
+    else:
+
+        # single gpu - check if initialisiation exists
+        if os.path.isfile('models/unet/saved_models/initialisation.pth'):
+            pass  # Will load later
+        else:
+            print("Making new model")
+            model = ts.load_model(params, experiment_folder="no", save_reps=False)
+            torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
+
+def define_experiment(test_small_slurm=False):
+
+    lr_bs_eps = [(0.001 , 4, 120 ),
+                 (0.0008, 8, 140 ),
+                 (0.0012, 5, 100 ),
+                 (0.0011, 6, 110 )]
+
+    number_samples = -1 # e.g. all
+
+    cln_types = ["no_clean"]#, "no_clean"]
+
+    # For local testing:
+    train_local = (torch.cuda.device_count() <= 1)
+    
+    if train_local:
+        
+        print("************************")
+        print("TEMP number of samples 5")
+        print("************************")
+        
+        lr_bs_eps = [(0.02, 1, 1), (0.002, 1, 1)]#2)]
+        number_samples = 5
+    
+    # If doing small slurm
+    if test_small_slurm and torch.cuda.device_count() > 1:
+        
+        print("*******************")
+        print("TESTING SMALL SCALE")
+        print("*******************")
+
+        lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
+
+    return lr_bs_eps, number_samples, cln_types
+
+def load_fresh_model(params, experiment_folder="no", save_reps=False):
+
+    # Initialise model
+    unet = ts.load_model(params, experiment_folder="no", save_reps=False)
+
+    if torch.cuda.device_count() > 1:
+        unet.module.load_state_dict(torch.load("models/unet/saved_models/initialisation_multi.pth"))
+    else:
+        unet.load_state_dict(torch.load("models/unet/saved_models/initialisation.pth"))
+
+    return unet
 
 def run_experiment(unet, params, trainloader, testloader, classes, experiment_folder, number_samples=-1, save_reps=False):
 
@@ -14,7 +78,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
     fn = tm.construct_file(params, experiment_folder)
 
     # Do training - means are per cel
-    out_shape, epoch_mean_loss, accuracy_mean_val, training_order =\
+    out_shape, epoch_mean_loss, accuracy_mean_val, central_accuracy_mean_val, training_order =\
         ts.train(unet, trainloader, params, fake=False, 
                  experiment_folder=fn)
 
@@ -22,25 +86,78 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
 
     # can plot epoch_mean_loss on epoch for loss change:
     plt.figure()
+    np.array(epoch_mean_loss).dump(fn + "epoch_loss.pkl")
     plt.plot(np.arange(len(epoch_mean_loss)), epoch_mean_loss)
+    plt.title("Loss on epoch, bs=%d lr_0=%s" % (params["batch_size"], str(params["lr_0"])))
+    plt.ylabel("Loss / pixel")
+    plt.xlabel("Epochs")
     plt.savefig(fn + "epoch_loss.png")
     plt.close()
 
     # Plot the accuracy on epoch of the validation set
     plt.figure()
+    np.array(accuracy_mean_val).dump(fn + "epoch_accuracy.pkl")
     plt.plot(np.arange(len(accuracy_mean_val)), accuracy_mean_val)
+    plt.title("Accuracy on epoch, bs=%d lr_0=%s" % (params["batch_size"], str(params["lr_0"])))
+    plt.ylabel("Accuracy %")
+    plt.xlabel("Epochs")
     plt.savefig(fn + "epoch_accuracy.png")
     plt.close()
 
+    # Plot the central on epoch of the validation set
+    plt.figure()
+    np.array(central_accuracy_mean_val).dump(fn + "epoch_central_accuracy.pkl")
+    plt.plot(np.arange(len(central_accuracy_mean_val)), central_accuracy_mean_val)
+    plt.title("Class 1-7 accuracy on epoch, bs=%d lr_0=%s" % (params["batch_size"], str(params["lr_0"])))
+    plt.ylabel("Accuracy %")
+    plt.xlabel("Epochs")
+    plt.savefig(fn + "epoch_central_accuracy.png")
+    plt.close()
+
     # Do test
-    acc = ts.test(unet, testloader, params, out_shape, classes, 
-                  experiment_folder=fn, save_graph=True)
+    acc, central_acc = ts.test(unet, testloader, params, out_shape, classes, 
+                               experiment_folder=fn, save_graph=True)
 
-    return fn, acc
+    return fn, acc, central_acc
 
+def make_plot(x, y, title):
+    """Makes an ordered plot of y on x."""
+    
+    ordered_y = [i for _, i in sorted(zip(x, y))]
+    ordered_x = sorted(x)
+
+    # PLOT BS
+    plt.figure()
+    plt.scatter(ordered_x, ordered_y, marker='x')
+    plt.title("Accuracy on " + title)
+    plt.xlabel(title)
+    plt.ylabel("Accuracy")
+    plt.savefig(experiment_folder + "accuracy_on " + title.lower().replace(" ", "_") + ".png")
+    plt.close()
+
+def make_heat_map(lrs, bss, central_accuracies):
+
+    plt.figure()
+    sc = plt.scatter(lrs, bss, c=central_accuracies, s=250, 
+                     cmap=plt.cm.get_cmap('RdYlBu'), 
+                     clim=(min(central_accuracies), max(central_accuracies)))
+
+    plt.colorbar(sc)
+    plt.title("Parameter grid search - central accuracies")
+    plt.xlabel("LR_0")
+    plt.xlim((0, 0.02))
+    plt.ylabel("Batch Size")
+    plt.ylim((0, 10))
+    plt.savefig(experiment_folder + "random_grid.png")
+    plt.close()
 
 if __name__ == "__main__":
 
+    # Track time for whole script
+    TIME_TOTAL = time.time()
+
+    print("Script started at", datetime.datetime.now())
+    
     # Set up system path
     print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
     sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
@@ -49,33 +166,9 @@ if __name__ == "__main__":
     
     # Copy over default parameters        
     params = tm.get_params()
-    #params["scan_location"] = "data/input_tensors/segmentation_data/datasets/"
-    #params["torch"] = False
 
-    print("using data from", params["scan_location"], params["torch"])
-
-    lr_bs_eps = [(0.002 , 2, 60  ),
-                 (0.0005, 8, 240 ),
-                 (0.001 , 4, 120 )]
-
-    number_samples = -1 # e.g. all
-
-    #################################
-    ### TEMP - for local testing ####
-    train_local = True
-    test_small_slurm = False
-    if train_local:
-        print("************************")
-        print("TEMP number of samples 5")
-        print("************************")
-        lr_bs_eps = [(0.01, 1, 1)]#2)]
-        number_samples = 5
-    if test_small_slurm:
-        print("*******************")
-        print("TESTING SMALL SCALE")
-        print("*******************")
-        lr_bs_eps = [(0.01, 2, 3), (0.005, 4, 2)]
-    #################################
+    # Load up the experiment we want to run
+    lr_bs_eps, number_samples, cln_types = define_experiment()
 
     ## LOAD DATA - same order for all ##
     if params["torch"]:
@@ -83,97 +176,101 @@ if __name__ == "__main__":
     else:
         trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
 
-    # LOAD MODEL - so that stays same for all #
-    model = ts.load_model(params, experiment_folder="no", save_reps=False)
+    # Save a model if one doesn't already exist
+    initialise_model(params)
     
-    if torch.cuda.device_count() > 1:
-        torch.save(model.module.state_dict())
-    else:
-        torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
-
     ## RUN EXPERIMENT ##
+    for cln_type in cln_types:
 
-    for cln_type in ["loss", "no_clean"]:
-
-        ## Set up the experiment with data cleaning ##
+        print("\nRunning clean type", cln_type)
         params["clean"] = cln_type
 
-        print("Running clean type", cln_type)
-        
         experiment_folder = "data/initialising_" + cln_type + "/"
-        meta_results_file = experiment_folder + "metaresults.txt"
-        running_file =  experiment_folder + "running.txt"
-        
-        lrs, bss, eps = [], [], [] # for tracking
-        accuracies, accuracies_info = [], []
-        #dummy_i = 0.555
 
-        # Make file
+        # Keep local results separate
+        if (torch.cuda.device_count() <= 1):
+            experiment_folder = experiment_folder.replace("initialising_", "LOCAL_initialising_")
+        
+        # Make file if doensn't exist
         if not os.path.exists(experiment_folder):
             os.makedirs(experiment_folder)
         
+        meta_results_file = experiment_folder + "metaresults.txt"
+        running_file =  experiment_folder + "running.txt"
+
+        # Load in tracking lists
+        if not os.path.isfile(experiment_folder + "pickled_record.pickle"):
+            print("No previous experiments found.")
+            lrs, bss, eps, accuracies, accuracies_info, central_accuracies = [],[],[],[],[],[]    
+        else:
+            print("Reading in previous experiments.")
+            with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
+                (lrs, bss, eps, accuracies, accuracies_info, central_accuracies) = pickle.load(f)
+
+        # Initialise the running file for the experiment
+        with open(running_file, "w+") as rf:
+            rf.write("Central, Accuracy, Experiment,   Time\n")
+        
         # Do the hyperparameter search
-        for tup in lr_bs_eps:
+        for (lr, bs, e) in lr_bs_eps:
 
-            unet = ts.load_model(params, experiment_folder="no", save_reps=False)
-            unet.load_state_dict(torch.load("models/unet/saved_models/initialisation.pth"))
+            print("\nStarting at", datetime.datetime.now(), "with lr", lr, "- bs", bs, "- epochs", e, "\n")
+
+            # Load fresh model
+            unet = load_fresh_model(params)
             
-            lr, bs, e = tup[0], tup[1], tup[2]
-            print("Running (lr, bs, e) :", tup)
-            params["epochs"] = e
-            params["batch_size"] = bs
-            params["lr_0"] = lr
-
-            lrs.append(lr)
-            bss.append(bs)
-            eps.append(eps)
+            # Define params
+            params["epochs"], params["batch_size"], params["lr_0"] = e, bs, lr
 
             # Run the experiment
             t_start = time.time()
-            filename, test_accuracy = run_experiment(unet, params, trainloader, testloader, classes, 
-                                                     experiment_folder, number_samples=number_samples)
+            
+            filename, test_accuracy, central_acc =\
+                run_experiment(unet, params, trainloader, testloader, classes, 
+                               experiment_folder, number_samples=number_samples)
+
             t_end = time.time()
 
-            # Dummy version to check exp is working
-            """
-            dummy_i *= lr
-            filename, test_accuracy = dummy(params, dummy_i)
-            """
+            # Record for graph plotting
+            lrs.append(lr), bss.append(bs), eps.append(e)
 
             accuracies.append(test_accuracy)
-            accuracies_info.append((filename, test_accuracy, (t_end-t_start)/(60**2)))
+            central_accuracies.append(central_acc)
+            accuracies_info.append((central_acc, test_accuracy, filename, (t_end-t_start)/(60**2), ))
 
-            # Keep running order
-            print("Writing output to running results")
+            # Record info to file
+            print("\nWriting output to running results")
             with open(running_file, "a+") as rf:
-                rf.write(str(test_accuracy) + "," + str(filename) + "," + str((t_end-t_start)/(60**2)) + "\n")
+                rf.write("%.3f, %.3f, %s, %.3f\n" % (central_acc, test_accuracy, filename, ((t_end-t_start)/(60**2))))
+
+            # Keep a running list of the results for plotting
+            with open(experiment_folder + "pickled_record.pickle", 'wb') as f:
+                pickle.dump((lrs, bss, eps, accuracies, accuracies_info, central_accuracies), f)
+
+            ## Make running plots - overwrite old ones ##
+
+            make_plot(bss, accuracies, "Batch Size")
+            make_plot(lrs, accuracies, "Learning Rate_0")
+
+            # PLOT PARAMETER SEARCH GRID
+            make_heat_map(lrs, bss, central_accuracies)
+
+            print("Completed run at", datetime.datetime.now())
+
+        ## ANALYSIS ##
 
         # Sort ordered accuracy
         ordered_accuracy = sorted(accuracies_info, key=lambda x: x[1])
-        
-        # Plot batch size on accuracy
-        bs_accuracies = [x for _, x in sorted(zip(bss, accuracies))]
-        bs_bss = sorted(bss)
-        
-        plt.figure()
-        plt.plot(bss, accuracies)
-        plt.savefig(experiment_folder + "accuracy_on_bs.png")
-        plt.close()
 
-        # Plot LR on accuracy
-        lr_accuracies = [x for _, x in sorted(zip(lrs, accuracies))]
-        lrs = sorted(lrs)
-        
-        plt.figure()
-        plt.plot(lrs, accuracies)
-        plt.savefig(experiment_folder + "accuracy_on_lr.png")
-        plt.close()
+        TIME_TOTAL = time.time() - TIME_TOTAL
 
         # Print it to a file line by line
         print("\nWriting output to metaresults")
         with open(meta_results_file, "w+") as mrf:
-            mrf.write("Accuracy, Experiment, Time")
+            mrf.write("Central, Accuracy, Experiment,   Time (hrs)\n")
             for l in ordered_accuracy:
-                mrf.write("\n" + str(l[1]) + "," + str(l[0]) + "," + str(l[2]))
+                mrf.write("%.3f, %.3f, %s, %.3f\n" % (l[0], l[1], l[2], l[3]))
+            #mrf.write("\nTIME TO COMPLETION: %.3f" % (TIME_TOTAL / (60**2)))
 
     print("Successful completion")
+    print("Completed in %.3f hours" % (TIME_TOTAL / (60**2)))

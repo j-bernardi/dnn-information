@@ -85,6 +85,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
     loss_list = []
     epoch_mean_loss = []
     accuracy_mean_val = []
+    central_accuracy_mean_val = []
     frst = True
     
     # retains the order of original training images
@@ -116,6 +117,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
         epoch_loss  = 0.0
         
         total_cells_seen, total_cells_correct = 0, 0
+        total_central_cells_correct, total_central_cells_seen = 0, 0
         total_batches_seen, total_images_seen = 0, 0
 
         train_shuffles.append([])
@@ -185,7 +187,20 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             # Basic accuracy
             cells_correct = torch.eq(pred_classes, shaped_labels.long())
             cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)
-            
+
+            # Remove from correct counts
+            central_cells_correct = torch.where(shaped_labels == 0, 
+                                        torch.tensor(0, device=inputs.device, dtype=torch.uint8),
+                                        cells_correct)
+            central_cells_correct = torch.where(shaped_labels == 8, 
+                                        torch.tensor(0, device=inputs.device, dtype=torch.uint8),
+                                        central_cells_correct)
+
+            # Remove central cells
+            central_cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)
+            central_cells_seen -= (shaped_labels == 0).sum().item()
+            central_cells_seen -= (shaped_labels == 8).sum().item()
+        
             # Remove the cells that are white and of class 0 or 8
             if params["clean"] == "loss":
                 if frst:
@@ -197,7 +212,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                 
                 # Class 8 - remove white from correct count
                 class8_remove = (inputs == 1.) & (shaped_labels == 8)#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
-                
+
                 # Remove from correct counts
                 cells_correct = torch.where(class0_remove == 1, 
                                             torch.tensor(0, device=inputs.device, dtype=torch.uint8),
@@ -211,11 +226,12 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                 cells_seen -= (class0_remove).sum().item()
                 cells_seen -= (class8_remove).sum().item()
 
-
             total_cells_correct += cells_correct.sum().item()
+            total_central_cells_correct += central_cells_correct.sum().item()
             
             total_cells_seen += cells_seen
             running_cells_seen += cells_seen
+            total_central_cells_seen += central_cells_seen
             
             # Totals
             total_images_seen += outputs.size(0)
@@ -272,10 +288,12 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
         
         # Accuracy
         accuracy = 100. * total_cells_correct / total_cells_seen
+        central_accuracy = 100. * total_central_cells_correct / total_central_cells_seen
 
         # Losses - per image
         epoch_mean_loss.append(epoch_loss / total_cells_seen)
         accuracy_mean_val.append(accuracy)
+        central_accuracy_mean_val.append(central_accuracy)
 
         # Print
         print('[Epoch %d complete] mean loss / pixel: %.3f, accuracy %.3f %%' %
@@ -286,7 +304,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             with open(reporting_file + "TRAIN.txt", 'a+') as ef:
                 ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss / total_cells_seen, accuracy))
 
-    return outputs.shape, epoch_mean_loss, accuracy_mean_val, train_shuffles
+    return outputs.shape, epoch_mean_loss, accuracy_mean_val, central_accuracy_mean_val, train_shuffles
 
 def do_info(unet, training_order, trainloader, params):
     """
@@ -630,7 +648,7 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
                 ef.write("\nEqually weighted accuracies: %.d%%" % (sum(accuracies) / len(accuracies)))
                 ef.write("\nEqually weighted confidence: %.3f\n" % (sum(confs) / len(confs)))
 
-    return overall_accuracy
+    return overall_accuracy, central_accuracy
 
 def save_graphs(inputs, labels, predicted, og_idx, reporting_file):
     """Save the graphs to visualise how well we've done."""
@@ -751,7 +769,7 @@ if __name__ == "__main__":
     unet = load_model(params, experiment_folder=experiment_folder)
 
     ## TRAIN ##
-    shape, epoch_mean_loss, accuracy_mean_val, training_order =\
+    shape, epoch_mean_loss, accuracy_mean_val, central_accuracy, training_order =\
         train(unet, trainloader, params, fake=False, experiment_folder=experiment_folder)
 
     if params["save_model"]:
@@ -783,7 +801,7 @@ if __name__ == "__main__":
         plot_information.plot_information_plane(IXT_array, ITY_array, num_epochs=params["epochs"], every_n=params["every_n"])
 
     ## TEST ##
-    acc = test(unet, testloader, params, shape, classes, experiment_folder=experiment_folder)
+    acc, cent_acc = test(unet, testloader, params, shape, classes, experiment_folder=experiment_folder)
 
     if params["save_model"]:
         print("\nSaving model to", experiment_folder + "unet2d_TRAINED.pth")

@@ -54,7 +54,7 @@ def get_imdb_data(fn, batch_size=8, val_split=0.2, num=0, shuffle=True, workers=
     set = np.squeeze(np.asarray(set))
     
     sz = Data.shape
-    print("og sz", sz)
+    #print("og sz", sz)
     
     print("Data shape", Data.shape)
     
