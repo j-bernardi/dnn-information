@@ -26,16 +26,18 @@ def initialise_model(params):
             model = ts.load_model(params, experiment_folder="no", save_reps=False)
             torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
 
-def define_experiment(test_small_slurm=True):
-
-    cln_types = ["loss", "no_clean"]
+def define_experiment(test_small_slurm=False):
 
     lr_bs_eps = [(0.001 , 4, 120 ),
-                 (0.0008, 8, 180 ),
-                 (0.0009, 6, 100 ),
                  (0.0012, 4, 100 ),
+                 (0.0009, 6, 100 ),
+                 (0.0008, 8, 180 ),
                  (0.0005, 8, 240 ),
-                 (0.0015, 2, 60  )]
+                 (0.0015, 2, 80  )]
+
+    # DEFINE
+    cln_types = ["loss"]#, "no_clean"]
+    lr_bs_eps = [lr_bs_eps[5]]
 
     number_samples = -1 # e.g. all
 
@@ -199,15 +201,6 @@ if __name__ == "__main__":
         meta_results_file = experiment_folder + "metaresults.txt"
         running_file =  experiment_folder + "running.txt"
 
-        # Load in tracking lists
-        if not os.path.isfile(experiment_folder + "pickled_record.pickle"):
-            print("No previous experiments found.")
-            lrs, bss, eps, accuracies, accuracies_info, central_accuracies = [],[],[],[],[],[]    
-        else:
-            print("Reading in previous experiments.")
-            with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
-                (lrs, bss, eps, accuracies, accuracies_info, central_accuracies) = pickle.load(f)
-
         # Initialise the running file for the experiment
         with open(running_file, "w+") as rf:
             rf.write("Central, Accuracy, Experiment,   Time\n")
@@ -245,6 +238,15 @@ if __name__ == "__main__":
             print("Training complete in %.3f hrs" % ((t_end-t_start)/(60**2)))
             ####################
 
+            # Load in most recent tracking lists
+            if not os.path.isfile(experiment_folder + "pickled_record.pickle"):
+                print("No previous experiments found.")
+                lrs, bss, eps, accuracies, accuracies_info, central_accuracies = [],[],[],[],[],[]    
+            else:
+                print("Reading in previous experiments.")
+                with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
+                    (lrs, bss, eps, accuracies, accuracies_info, central_accuracies) = pickle.load(f)
+
             # Record outputs for graph plotting
             lrs.append(lr), bss.append(bs), eps.append(e)
 
@@ -252,14 +254,14 @@ if __name__ == "__main__":
             central_accuracies.append(central_acc)
             accuracies_info.append((central_acc, test_accuracy, filename, (t_end-t_start)/(60**2)))
 
+            # Keep a running list of the results for plotting
+            with open(experiment_folder + "pickled_record.pickle", 'wb') as f:
+                pickle.dump((lrs, bss, eps, accuracies, accuracies_info, central_accuracies), f)
+
             # Record info to file
             print("\nWriting output to running results")
             with open(running_file, "a+") as rf:
                 rf.write("%.3f, %.3f, %s, %.3f\n" % (central_acc, test_accuracy, filename, ((t_end-t_start)/(60**2))))
-
-            # Keep a running list of the results for plotting
-            with open(experiment_folder + "pickled_record.pickle", 'wb') as f:
-                pickle.dump((lrs, bss, eps, accuracies, accuracies_info, central_accuracies), f)
 
             ## Make running plots - overwrite old ones ##
 
