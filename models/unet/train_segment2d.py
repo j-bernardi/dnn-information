@@ -88,7 +88,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
     central_accuracy_mean_val = []
     frst = True
     global_images_seen = 0
-    
+
     # retains the order of original training images
     train_shuffles = []
 
@@ -316,9 +316,6 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
         if reporting_file != "no":
             with open(reporting_file + "TRAIN.txt", 'a+') as ef:
                 ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss / total_cells_seen, accuracy))
-
-        # No longer first epoch
-        frst = False
     
     return outputs.shape, epoch_mean_loss, accuracy_mean_val, central_accuracy_mean_val, train_shuffles
 
@@ -389,7 +386,7 @@ def get_original_order(trainloader):
 
     return X_train, y_one_hot
 
-def test(unet, testloader, params, shape, classes, experiment_folder="no", save_graph=False):
+def test(unet, testloader, params, shape, classes, experiment_folder="no", save_graph=False, return_confusion=False):
     """Test the network."""
 
     print("Testing")
@@ -664,7 +661,10 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
                 ef.write("\nEqually weighted accuracies: %.d%%" % (sum(accuracies) / len(accuracies)))
                 ef.write("\nEqually weighted confidence: %.3f\n" % (sum(confs) / len(confs)))
 
-    return overall_accuracy, central_accuracy
+    if return_confusion:
+        return overall_accuracy, central_accuracy , confusion_mat, norm_confusion_mat
+    else:
+        return overall_accuracy, central_accuracy
 
 def save_graphs(inputs, labels, predicted, og_idx, reporting_file):
     """Save the graphs to visualise how well we've done."""

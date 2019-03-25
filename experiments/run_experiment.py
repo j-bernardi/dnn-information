@@ -33,6 +33,10 @@ def define_experiment(test_small_slurm=False):
     
     smoothing_types = ["none", "uniform_fixed_eps", "uniform_vary_eps", "weighted_fixed_eps", "weighted_vary_eps"]
     
+    N_SO_FAR = 0
+    N_REPEATS = 2
+
+    ## TODO : fix h params
     lr_bs_eps = (0.001, 4, 240)
 
     number_samples = -1 # e.g. all
@@ -45,8 +49,8 @@ def define_experiment(test_small_slurm=False):
         print("************************")
         print("TEMP number of samples 5")
         print("************************")
-        
-        lr_bs_eps = (0.02, 1, 1)
+        smoothing_types = ["none", "uniform_fixed_eps"]    
+        lr_bs_eps = (0.02, 1, 2)
         number_samples = 5
     
     # If doing small slurm
@@ -58,7 +62,7 @@ def define_experiment(test_small_slurm=False):
 
         lr_bs_eps = (0.005, 4, 2)
 
-    return lr_bs_eps, number_samples, cln_type, smoothing_types
+    return lr_bs_eps, number_samples, cln_type, smoothing_types, (N_SO_FAR, N_REPEATS)
 
 def load_fresh_model(params, experiment_folder="no", save_reps=False, save_model=False):
 
@@ -72,10 +76,10 @@ def load_fresh_model(params, experiment_folder="no", save_reps=False, save_model
 
     return unet
 
-def run_experiment(unet, params, trainloader, testloader, classes, experiment_folder, number_samples=-1, save_reps=False):
+def run_experiment(unet, params, trainloader, testloader, classes, experiment_folder, number_samples=-1, save_reps=False, nth_repeat=-1):
 
     # Get save file name for this given experiment
-    fn = tm.construct_file(params, experiment_folder)
+    fn = tm.construct_file(params, experiment_folder, append=("_"+str(nth_repeat)))
 
     # Do training - means are per cel
     out_shape, epoch_mean_loss, accuracy_mean_val, central_accuracy_mean_val, training_order =\
@@ -115,10 +119,99 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
     plt.close()
 
     # Do test
-    acc, central_acc = ts.test(unet, testloader, params, out_shape, classes, 
-                               experiment_folder=fn, save_graph=True)
+    acc, central_acc, confusion, norm_confusion = ts.test(unet, testloader, params, out_shape, classes, 
+        experiment_folder=fn, save_graph=True, return_confusion=True)
 
-    return fn, acc, central_acc
+    return fn, acc, central_acc, accuracy_mean_val, central_accuracy_mean_val, confusion, norm_confusion
+
+def plot_experiment(results_dict, experiment_folder):
+
+    ## TOTAL ##
+
+    plt.figure()
+    leg = []
+
+    for st in results_dict:
+        
+        leg.append(st)
+
+        # Take average
+        res_lst = np.array(results_dict[st]["accuracy_epochs"])
+        #print("res_lst", res_lst)
+
+        avg_res = np.sum(res_lst, axis=0) / res_lst.shape[0]
+
+        # Plot
+        plt.plot(range(len(avg_res)), avg_res)
+    
+    plt.legend(leg, loc='lower right')
+    plt.title("Total Accuracy on epochs")
+    plt.ylabel("Accuracy %")
+    plt.xlabel("Epochs")
+    plt.savefig(experiment_folder + "accuracy_total_epochs.png")
+    plt.close()
+
+    ## CENTRAL ##
+
+    plt.figure()
+    leg = []
+    for st in results_dict:
+        
+        leg.append(st)
+
+        # Take average
+        res_lst = np.array(results_dict[st]["central_accuracy_epochs"])
+        
+        avg_res = np.sum(res_lst, axis=0) / res_lst.shape[0]
+        
+        plt.plot(range(len(avg_res)), avg_res)
+    
+    plt.legend(leg, loc='lower right')
+    plt.title("Class 1-7 accuracy on epochs")
+    plt.ylabel("Central accuracy %")
+    plt.xlabel("Epochs")
+    plt.savefig(experiment_folder + "accuracy_central_epochs.png")
+    plt.close()
+
+def plot_test_results(results_dict, experiment_folder):
+
+    nms, avg_accs, stds = [], [], []
+
+    for st in results_dict:
+        
+        acc_lst = np.array(results_dict[st]["accuracies"])
+        
+        nms.append(st + " (" + str(len(acc_lst)) + ")")
+        avg_accs.append(np.sum(acc_lst) / len(acc_lst))
+        stds.append(np.std(acc_lst))
+
+    x_pos = np.arange(len(nms))
+        
+    plt.bar(x_pos, avg_accs, yerr=stds, align='center', alpha=0.5, ecolor='black')
+    plt.xticks(x_pos, nms)
+    plt.ylabel("Accuracy achieved %")
+    plt.title("Accuracy achieved for each smoothing type")
+    plt.savefig(experiment_folder + "comparison.png")
+    plt.close()
+
+def plot_confusion_matrices(results_dict, file_to):
+    """Save average confusion matrices"""
+    
+    classes = ["class" + str(i) for i in range(9)]
+
+    for st in results_dict:
+        
+        if st in file_to:
+            
+            conf_mat = np.array(results_dict[st]["confusion_matrix"]) 
+            norm_conf_mat = np.array(results_dict[st]["norm_confusion_matrix"])
+
+            avg_confusion = np.floor(conf_mat.sum(axis=0) / conf_mat.shape[0]).astype(int)
+            avg_norm_confusion = norm_conf_mat.sum(axis=0) / conf_mat.shape[0]
+        
+            # TODO - decide how I'm going to display uncertainty in the confusion matrix
+            ts.save_confusion(avg_confusion, classes, "/".join(file_to.split("/")[:-2]) + "/avg_confusion_" + st)
+            ts.save_confusion(avg_norm_confusion, classes, "/".join(file_to.split("/")[:-2]) + "/avg_norm_confusion_" + st)
 
 if __name__ == "__main__":
 
@@ -133,8 +226,6 @@ if __name__ == "__main__":
 
     # Set the meta folder
     experiment_folder = "data/experiment_" + experiment_number + "/"
-    meta_results_file = experiment_folder + "metaresults.txt"
-    running_file =  experiment_folder + "running.txt"
 
     # Keep local results separate
     if (torch.cuda.device_count() <= 1):
@@ -143,11 +234,14 @@ if __name__ == "__main__":
     # Make file if doesn't exist
     if not os.path.exists(experiment_folder):
         os.makedirs(experiment_folder)
+    
+    meta_results_file = experiment_folder + "metaresults.txt"
+    running_file =  experiment_folder + "running.txt"
 
     # Initialise the running file for the experiment
     with open(running_file, "w+") as rf:
         rf.write("Central, Accuracy, Smoothing_Type,   Time\n")
-    
+
     # Set up system path
     print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
     sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
@@ -158,99 +252,112 @@ if __name__ == "__main__":
     params = tm.get_params()
 
     # Load up the experiment we want to run
-    lr_bs_ep, number_samples, cln_type, smoothing_types = define_experiment()
+    lr_bs_ep, number_samples, cln_type, smoothing_types, (N_SO_FAR, N_TO) = define_experiment()
 
     # Set the parameters
     (lr, bs, ep) = lr_bs_ep
-    params["epochs"], params["batch_size"], params["lr_0"] = lr, bs, ep
+    params["lr_0"], params["batch_size"], params["epochs"] = lr, bs, ep
     params["clean"] = cln_type
+    params["shuffle"] = True
 
     print("Initialisation time %.3f secs" % (time.time() - TIME_TOTAL))
     
-    ## RUN EXPERIMENT PER SMOOTHING TYPE ##
-    for smoothing_type in smoothing_types:
+    for n in range(N_SO_FAR, N_TO):
 
-        # Time the run
-        print("\nRunning smoothing type", smoothing_type, "at", datetime.datetime.now())
-        TIME_RUN = time.time()
+        ## RUN EXPERIMENT PER SMOOTHING TYPE ##
+        for smoothing_type in smoothing_types:
 
-        # Set the smoothing type
-        params["smoothing_type"] = smoothing_type
-        
-        print("This smoothing type initialisation time %.3f secs" % (time.time() - t_clean))
+            # Time the run
+            print("\nRunning smoothing type", smoothing_type, "at", datetime.datetime.now())
+            TIME_RUN = time.time()
 
-        ## LOAD DATA ##
-        if params["torch"]:
-            trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
-        else:
-            trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
+            # Set the smoothing type
+            params["smoothing_type"] = smoothing_type
 
-        ## LOAD a freshly initialised model ##
-        unet = load_fresh_model(params)
+            ## LOAD DATA ##
+            if params["torch"]:
+                trainloader, testloader, classes = ts.load_torch_data(params, number_samples=number_samples)
+            else:
+                trainloader, testloader, train_id, test_id, classes = ts.load_h5_data(params, number_samples=number_samples)
 
-        ####################
-        # Run the experiment
-        t_start = time.time()
-        
-        # Filename for this smoothing type only
-        filename, test_accuracy, central_acc =\
-            run_experiment(unet, params, trainloader, testloader, classes, 
-                           experiment_folder, number_samples=number_samples)
+            ## LOAD a freshly initialised model ##
+            unet = load_fresh_model(params)
 
-        t_end = time.time()
-
-        print("Training complete in %.3f hrs" % ((t_end-t_start)/(60**2)))
-        ####################
-
-        # Load in most recent tracking lists
-        if not os.path.isfile(filename + "pickled_record.pickle"):
+            ####################
+            # Run the experiment
+            t_start = time.time()
             
-            print("No previous experiments found.")
+            # Filename for this smoothing type only
+            filename, test_accuracy, central_acc, accuracy_epochs,\
+            central_accuracy_epochs, confusion, norm_confusion =\
+                run_experiment(unet, params, trainloader, testloader, classes, 
+                               experiment_folder, number_samples=number_samples, nth_repeat=n)
             
-            results_dict = {smoothing_type: {"accuracies":[], "central_accuracies":[], "accuracies_info":[]}}
-        
-        else:
-            
-            print("Reading in previous experiments.")
-            
-            with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
-                results_dict = pickle.load(f)
-            
-            if smoothing_type not in results_dict:
-                results_dict[smoothing_type] = {"accuracies":[], "central_accuracies":[], "accuracies_info":[]}
+            t_end = time.time()
 
-        # Record outputs for graph plotting
-        results_dict[smoothing_type]["accuracies"].append(test_accuracy)
-        results_dict[smoothing_type]["central_accuracies"].append(central_acc)
-        results_dict[smoothing_type]["accuracies_info"].append((central_acc, test_accuracy, filename, (t_end-t_start)/(60**2)))
+            print("Training complete in %.3f hrs" % ((t_end-t_start)/(60**2)))
+            ####################
 
-        # Keep a running list of the results for plotting
-        with open(experiment_folder + "pickled_record.pickle", 'wb') as f:
-            pickle.dump((lrs, bss, eps, accuracies, accuracies_info, central_accuracies), f)
+            ## RESULTS DICT ##
 
-        # Record info to file
-        print("\nWriting output to running results")
-        with open(running_file, "a+") as rf:
-            rf.write("%.3f, %.3f, %s, %.3f\n" % (central_acc, test_accuracy, filename, ((t_end-t_start)/(60**2))))
+            # Load in most recent tracking lists
+            if not os.path.isfile(experiment_folder + "pickled_record.pickle"):
+                
+                print("No previous experiments found. Creating results dict")
+                results_dict = {smoothing_type :  {"accuracies": [], 
+                                                   "central_accuracies": [],
+                                                   "accuracy_epochs": [],
+                                                   "central_accuracy_epochs": [],
+                                                   "confusion_matrix": [],
+                                                   "norm_confusion_matrix": []
+                                                  }
+                                }
+                meta_results = []
+            else:
+                
+                print("Reading in previous experiments.")
+                with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
+                    (results_dict, meta_results) = pickle.load(f)
+                
+                # Initialise if required
+                if smoothing_type not in results_dict:
+                    results_dict[smoothing_type] = {"accuracies":[], 
+                                                    "central_accuracies":[], 
+                                                    "accuracy_epochs": [], 
+                                                    "central_accuracy_epochs": [],
+                                                    "confusion_matrix": [],
+                                                    "norm_confusion_matrix":[]}
 
-        ## Make running plots - overwrite old ones ##
+            # Record outputs for graph plotting
+            results_dict[smoothing_type]["accuracies"].append(test_accuracy)
+            results_dict[smoothing_type]["central_accuracies"].append(central_acc)
+            results_dict[smoothing_type]["accuracy_epochs"].append(np.array(accuracy_epochs))
+            results_dict[smoothing_type]["central_accuracy_epochs"].append(np.array(central_accuracy_epochs))
+            results_dict[smoothing_type]["confusion_matrix"].append(confusion)
+            results_dict[smoothing_type]["norm_confusion_matrix"].append(norm_confusion)
+            meta_results.append((central_acc, test_accuracy, filename, (t_end-t_start)/(60**2)))
 
-        make_plot(bss, accuracies, "Total", "Batch Size", experiment_folder)
-        make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
-        make_plot(lrs, accuracies, "Total", "Learning Rate_0", experiment_folder)
-        make_plot(lrs, central_accuracies, "Central", "Learning Rate_0", experiment_folder)
+            # Dump the newly added results
+            with open(experiment_folder + "pickled_record.pickle", 'wb') as f:
+                pickle.dump((results_dict, meta_results), f)
 
-        # PLOT PARAMETER SEARCH GRID
-        make_heat_map(lrs, bss, central_accuracies, "central accuracy", experiment_folder)
-        make_heat_map(lrs, bss, accuracies, "total accuracy", experiment_folder)
+            # Record info to file
+            print("\nWriting output to running results")
+            with open(running_file, "a+") as rf:
+                rf.write("%.3f, %.3f, %s, %.3f\n" % (central_acc, test_accuracy, filename, ((t_end-t_start)/(60**2))))
 
-        print("Completed run at", datetime.datetime.now())
-        print("Time for run %.3f hrs" % ((time.time() - TIME_RUN) / (60**2)))
+            ## Make running plots - overwrite old ones ##
+            plot_experiment(results_dict, experiment_folder)
+            plot_test_results(results_dict, experiment_folder)
+            plot_confusion_matrices(results_dict, filename)
+
+            print("Completed run at", datetime.datetime.now())
+            print("Time for run %.3f hrs" % ((time.time() - TIME_RUN) / (60**2)))
 
     ## ANALYSIS ##
 
     # Sort ordered accuracy
-    ordered_accuracy = sorted(accuracies_info, key=lambda x: x[1])
+    ordered_accuracy = sorted(meta_results, key=lambda x: x[1])
 
     # Print it to a file line by line
     print("\nWriting output to metaresults")
@@ -258,7 +365,6 @@ if __name__ == "__main__":
         mrf.write("Central, Accuracy, Experiment,   Time (hrs)\n")
         for l in ordered_accuracy:
             mrf.write("%.3f, %.3f, %s, %.3f\n" % (l[0], l[1], l[2], l[3]))
-        #mrf.write("\nTIME TO COMPLETION: %.3f" % (TIME_TOTAL / (60**2)))
 
     print("Successful completion")
     print("Completed in %.3f hours" % ((time.time() - TIME_TOTAL) / (60**2)))

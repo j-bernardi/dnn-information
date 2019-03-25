@@ -39,25 +39,26 @@ def remake_graph(experiment_folder="data/initialising_loss/"):
 def define_experiment(test_small_slurm=False):
 
     # Too computationally expensive to go higher
-    lr_2_eps = [(0.0015, 2, 80)]
+    lr_2_eps = [(0.0015, 2, 70)]  # 2.5 hr
 
-    lr_4_eps = [(0.0010, 4, 120 ),
-                (0.0006, 4, 200 ),
-                (0.0012, 3, 100 )]
+    lr_4_eps = [(0.0002, 4, 180), # 2   hr 
+                (0.0010, 4, 100)] # 1.5 hr
+ 
+    lr_6_eps = [(0.0005, 6, 120)] # 1.4 hr
 
-    lr_6_eps = [(0.0018, 5,  80),
-                (0.0009, 6, 120)]
+    lr_8_eps = [(0.0001, 8, 220), # 1.8 hr
+                (0.0013, 7, 80 )] # 1.3 hr
 
-    lr_8_eps = [(0.0008 , 8, 170 ),
-                (0.0013 , 8, 100 ),
-                (0.0005 , 7, 220 )]
+    more_8s = [(0.00005, 8, 220), 
+               (0.00009, 8, 160)]
 
-    # As in original paper
-    extras = [(0.0001, 8, 240)]
+    a_12 = [(0.0001, 12, 160)]
 
     # DEFINE
-    cln_types = ["loss", "no_clean"]
-    lr_bs_eps = extras
+    cln_types = ["loss"]#, "no_clean"]
+    lr_bs_eps = [more_8s[1]]
+    #lr_bs_eps = lr_4_eps + lr_6_eps
+    #lr_bs_eps = lr_2_eps + lr_4_eps
 
     number_samples = -1 # e.g. all
 
@@ -69,14 +70,14 @@ def define_experiment(test_small_slurm=False):
         print("************************")
         print("TEMP number of samples 5")
         print("************************")
-        
-        lr_bs_eps = [(0.02, 1, 10)]#, (0.002, 1, 1)]#2)]
-        number_samples = 10
+
+        lr_bs_eps = [(0.002, 1, 3), (0.0001, 1, 2)]#, (0.002, 1, 1)]#2)]
+        number_samples = 5
         cln_types = ["loss"]
-    
+
     # If doing small slurm
     if test_small_slurm and torch.cuda.device_count() > 1:
-        
+
         print("*******************")
         print("TESTING SMALL SCALE")
         print("*******************")
@@ -169,7 +170,9 @@ def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
     plt.figure()
     sc = plt.scatter(lrs, bss, c=accuracies, s=250, 
                      cmap=plt.cm.get_cmap('RdYlBu'), 
-                     clim=(min(accuracies), max(accuracies)))
+                     clim=(min(accuracies), max(accuracies)),
+                     edgecolors='black',
+                     linewidths=1.0)
 
     plt.colorbar(sc)
     plt.title("Parameter grid search - " + title.lower())
@@ -298,8 +301,8 @@ if __name__ == "__main__":
 
             make_plot(bss, accuracies, "Total", "Batch Size", experiment_folder)
             make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
-            make_plot(np.array(lrs) / 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
-            make_plot(np.array(lrs) / 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
+            make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
+            make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
 
             # PLOT PARAMETER SEARCH GRID
             make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)

@@ -46,18 +46,16 @@ def get_params():
 
     return params
 
-# TODO - transforms - handle the dataset...
-
-def construct_file(params, direct, ignore=True):
+def construct_file(params, direct, ignore=True, append=""):
     """Produces file with headers. Add to gitignore"""
 
     if direct == "no":
         return "no"
 
-    file_name = params["smoothing_type"] + "_lr" + str(params["lr_0"]).split(".")[1] +\
+    file_name = params["smoothing_type"] + "_lr" + str(params["lr_0"]).split(".")[-1] +\
                 "_ep" + str(params["epochs"]) +\
-                "_bs" + str(params["batch_size"]) + "/"
-    
+                "_bs" + str(params["batch_size"]) + append + "/"
+
     if not os.path.exists(direct + file_name):
         os.makedirs(direct + file_name)
 
