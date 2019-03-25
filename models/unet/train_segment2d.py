@@ -72,7 +72,7 @@ def load_model(params, experiment_folder="no", save_reps=False):
 
     return unet
 
-def train(unet, trainloader, params, fake=False, experiment_folder="no"):
+def train(unet, trainloader, params, fake=False, experiment_folder="no", total_number_images=88):
     """Perform training."""
 
     # Set and create the reporting directory
@@ -86,15 +86,21 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
     epoch_mean_loss = []
     accuracy_mean_val = []
     central_accuracy_mean_val = []
-    times = [time.time()]
     frst = True
+    global_images_seen = 0
     
     # retains the order of original training images
     train_shuffles = []
 
-    # Learning rate and time to change #
-    idxs = np.floor(params["epochs"] * len(trainloader) * params["lr_idxs_array"]).astype(int)
+    # Which images to change learning rate on:
+    idxs = np.floor(params["epochs"] * total_number_images * params["lr_idxs_array"]).astype(int)
+    print("Updating at img", idxs)
+
+    # Update learning rate to:
     lrs = params["lr_0"] * params["lr_array"]
+    print("Updating to lrs", lrs)
+
+    # Next index to update learning rate on
     next_idx = 0
 
     # Adam optimizer - https://arxiv.org/abs/1412.6980 #
@@ -128,17 +134,9 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             unet.module.reset()
         else:
             unet.reset()
-
-        # 1. Resetting
-        if frst:
-            times.append(time.time() - times[-1])
         
         # ITERATE DATA
         for i, data in enumerate(trainloader, 0):
-
-            # 2. Enumerating
-            if frst:
-                times.append(time.time() - times[-1])
 
             # Load the tensors properly
             if params["torch_data"]:
@@ -160,31 +158,28 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             optimizer.zero_grad()
 
             # adjust lr over iterations
-            if total_images_seen * epoch == idxs[next_idx]:
-                print("UPDATING LR", lrs[next_idx])
-                # update the learning rate
-                for g in optimizer.param_groups:
-                    g['lr'] = lrs[next_idx]
-                # update the next one to look at
-                if next_idx + 1 < len(idxs):
-                    next_idx += 1
-                else:
-                    next_idx = 0
+            
+            # If got to end (e.g. next_idx is outside range for idxs), don't update
+            if next_idx < len(idxs):
 
-            # Data prep
-            if frst:
-                times.append(time.time() - times[-1])
+                # If time to update, update
+                if global_images_seen >= idxs[next_idx]:
+                    
+                    print("UPDATING LR", lrs[next_idx])
+
+                    # update the learning rate
+                    for g in optimizer.param_groups:
+                        g['lr'] = lrs[next_idx]
+
+                    # update the next one to look at
+                    next_idx += 1
 
             # Get this batch's outputs - probabilities over 9 classes
             outputs = unet(inputs)
 
-            # 3. Output
-            if frst:
-                times.append(time.time() - times[-1])
-
             # Skip the actual training if desired [for testing]
             if fake:
-                return outputs.shape, outputs.numel()
+                return outputs.shape, [],[],[],[]
 
             # Calc loss
             loss = tm.calc_loss(inputs, outputs, labels, 
@@ -192,10 +187,6 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
                                 smoothing_type=params["smoothing_type"], 
                                 smoothing=params["label_smoothing"],
                                 clean=params["clean"])
-
-            # 4. loss
-            if frst:
-                times.append(time.time() - times[-1])
 
             # Get a tensor of the predicted classes
             pred_classes = torch.argmax(outputs.data, dim=1, keepdim=True)
@@ -255,13 +246,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             total_central_cells_seen += central_cells_seen
             
             # Totals
-            total_images_seen += outputs.size(0)
-            running_number_images += outputs.size(0)
+            global_images_seen += outputs.size(0) # all epochs
+            total_images_seen += outputs.size(0) # current epoch
+            running_number_images += outputs.size(0) # current report iter
             total_batches_seen += 1
-            
-            # 5. Cleaning    
-            if frst:
-                times.append(time.time() - times[-1])
 
             ## UPDATE WEIGHTS ##
             loss.backward()
@@ -271,17 +259,9 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
             running_loss += loss.item()
             epoch_loss += loss.item()
 
-            # 6. Backprop 
-            if frst:
-                times.append(time.time() - times[-1])
-
             # May as well
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-            # 7. Clear cache
-            if frst:
-                times.append(time.time() - times[-1])
 
             ## RECORD ITERATION INFO ##
 
@@ -331,13 +311,15 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no"):
         # Print
         print('[Epoch %d complete] mean loss / pixel: %.3f, accuracy %.3f%%, dt %s' %
               (epoch + 1, epoch_loss / total_cells_seen, accuracy, datetime.datetime.now()))
-        if frst:
-            print("TIME STEPS", times[:8])
+
         # Save to file
         if reporting_file != "no":
             with open(reporting_file + "TRAIN.txt", 'a+') as ef:
                 ef.write("EPOCH%d,%.3f,%.3f\n\n" % (epoch + 1, epoch_loss / total_cells_seen, accuracy))
 
+        # No longer first epoch
+        frst = False
+    
     return outputs.shape, epoch_mean_loss, accuracy_mean_val, central_accuracy_mean_val, train_shuffles
 
 def do_info(unet, training_order, trainloader, params):

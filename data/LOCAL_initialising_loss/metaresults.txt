@@ -1,0 +1,3 @@
+Central, Accuracy, Experiment,   Time (hrs)
+45.929, 67.016, data/LOCAL_initialising_loss/uniform_fixed_eps_lr02_ep10_bs1/, 0.073
+44.983, 72.248, data/LOCAL_initialising_loss/uniform_fixed_eps_lr02_ep10_bs1/, 0.069

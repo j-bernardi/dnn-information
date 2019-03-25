@@ -26,18 +26,38 @@ def initialise_model(params):
             model = ts.load_model(params, experiment_folder="no", save_reps=False)
             torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
 
+def remake_graph(experiment_folder="data/initialising_loss/"):
+
+    with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
+        (lrs, bss, eps, accuracies, accuracies_info, central_accuracies) = pickle.load(f)
+
+    make_heat_map(np.array(lrs) * 1000, bss, accuracies, "total accuracy", experiment_folder)
+    make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)
+    make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
+    make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
+
 def define_experiment(test_small_slurm=False):
 
-    lr_bs_eps = [(0.001 , 4, 120 ),
-                 (0.0012, 4, 100 ),
-                 (0.0009, 6, 100 ),
-                 (0.0008, 8, 180 ),
-                 (0.0005, 8, 240 ),
-                 (0.0015, 2, 80  )]
+    # Too computationally expensive to go higher
+    lr_2_eps = [(0.0015, 2, 80)]
+
+    lr_4_eps = [(0.0010, 4, 120 ),
+                (0.0006, 4, 200 ),
+                (0.0012, 3, 100 )]
+
+    lr_6_eps = [(0.0018, 5,  80),
+                (0.0009, 6, 120)]
+
+    lr_8_eps = [(0.0008 , 8, 170 ),
+                (0.0013 , 8, 100 ),
+                (0.0005 , 7, 220 )]
+
+    # As in original paper
+    extras = [(0.0001, 8, 240)]
 
     # DEFINE
-    cln_types = ["loss"]#, "no_clean"]
-    lr_bs_eps = [lr_bs_eps[5]]
+    cln_types = ["loss", "no_clean"]
+    lr_bs_eps = extras
 
     number_samples = -1 # e.g. all
 
@@ -50,8 +70,9 @@ def define_experiment(test_small_slurm=False):
         print("TEMP number of samples 5")
         print("************************")
         
-        lr_bs_eps = [(0.02, 1, 1)]#, (0.002, 1, 1)]#2)]
-        number_samples = 5
+        lr_bs_eps = [(0.02, 1, 10)]#, (0.002, 1, 1)]#2)]
+        number_samples = 10
+        cln_types = ["loss"]
     
     # If doing small slurm
     if test_small_slurm and torch.cuda.device_count() > 1:
@@ -76,7 +97,7 @@ def load_fresh_model(params, experiment_folder="no", save_reps=False):
 
     return unet
 
-def run_experiment(unet, params, trainloader, testloader, classes, experiment_folder, number_samples=-1, save_reps=False):
+def run_experiment(unet, params, trainloader, testloader, classes, experiment_folder, number_samples=-1, save_reps=False, total_number_images=88):
 
     # Get save file name for this given experiment
     fn = tm.construct_file(params, experiment_folder)
@@ -84,7 +105,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
     # Do training - means are per cel
     out_shape, epoch_mean_loss, accuracy_mean_val, central_accuracy_mean_val, training_order =\
         ts.train(unet, trainloader, params, fake=False, 
-                 experiment_folder=fn)
+                 experiment_folder=fn, total_number_images=total_number_images)
 
     print("\nTraining complete. Saving graphs")
 
@@ -124,7 +145,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
 
     return fn, acc, central_acc
 
-def make_plot(x, y, acc_type, title):
+def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,10)):
     """Makes an ordered plot of y on x."""
     
     ordered_y = [i for _, i in sorted(zip(x, y))]
@@ -133,13 +154,17 @@ def make_plot(x, y, acc_type, title):
     # PLOT BS
     plt.figure()
     plt.scatter(ordered_x, ordered_y, marker='x')
+    plt.xlim(xlim)
     plt.title("Accuracy on " + title)
-    plt.xlabel(title)
+    if "learning" in title.lower():
+        plt.xlabel("Learning rate_0 (10^-3)")
+    else:
+        plt.xlabel(title)
     plt.ylabel("Accuracy")
     plt.savefig(experiment_folder + acc_type+ "_accuracy_on" + title.lower().replace(" ", "_") + ".png")
     plt.close()
 
-def make_heat_map(lrs, bss, accuracies, title):
+def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
 
     plt.figure()
     sc = plt.scatter(lrs, bss, c=accuracies, s=250, 
@@ -148,14 +173,20 @@ def make_heat_map(lrs, bss, accuracies, title):
 
     plt.colorbar(sc)
     plt.title("Parameter grid search - " + title.lower())
-    plt.xlabel("LR_0")
-    plt.xlim((0, 0.02))
+    plt.xlabel("LR_0 (10^-3)")
+    plt.xlim((0, 2))
     plt.ylabel("Batch Size")
     plt.ylim((0, 10))
     plt.savefig(experiment_folder + title.lower().replace(" ", "_") + "_grid.png")
     plt.close()
 
 if __name__ == "__main__":
+
+    """
+    remake_graph(experiment_folder="data/initialising_loss/")
+    remake_graph(experiment_folder="data/initialising_no_clean/")
+    sys.exit()
+    """
 
     # Track time for whole script
     TIME_TOTAL = time.time()
@@ -265,14 +296,14 @@ if __name__ == "__main__":
 
             ## Make running plots - overwrite old ones ##
 
-            make_plot(bss, accuracies, "Total", "Batch Size")
-            make_plot(bss, central_accuracies, "Central", "Batch Size")
-            make_plot(lrs, accuracies, "Total", "Learning Rate_0")
-            make_plot(lrs, central_accuracies, "Central", "Learning Rate_0")
+            make_plot(bss, accuracies, "Total", "Batch Size", experiment_folder)
+            make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
+            make_plot(np.array(lrs) / 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
+            make_plot(np.array(lrs) / 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
 
             # PLOT PARAMETER SEARCH GRID
-            make_heat_map(lrs, bss, central_accuracies, "central accuracy")
-            make_heat_map(lrs, bss, accuracies, "total accuracy")
+            make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)
+            make_heat_map(np.array(lrs) * 1000, bss, accuracies, "total accuracy", experiment_folder)
 
             print("Completed run at", datetime.datetime.now())
             print("Time for run %.3f hrs" % ((time.time() - TIME_RUN) / (60**2)))

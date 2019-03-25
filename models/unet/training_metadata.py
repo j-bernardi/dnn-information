@@ -86,6 +86,7 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
             if False, just return "standard" cross entropy loss
             else apply smoothing of type smoothing_type:
         smoothing_type: 
+            0) "non" - no label smoothing, just one-hot
             1) "uniform_fixed_eps" 
                 Applies uniform smoothing, fixed magnitude
             2) "uniform_vary_eps"
@@ -251,6 +252,9 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
             assert (one_hot.sum(dim=1, keepdim=True) < 1.0001).all()
             assert (one_hot.sum(dim=1, keepdim=True) > 0.9999).all()
 
+        elif smoothing_type == "none":
+            pass
+        
         else:
             # If none of the 4 smoothing regimes
             raise NotImplementedError
