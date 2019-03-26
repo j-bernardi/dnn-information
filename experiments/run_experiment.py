@@ -34,10 +34,10 @@ def define_experiment(test_small_slurm=False):
     smoothing_types = ["none", "uniform_fixed_eps", "uniform_vary_eps", "weighted_fixed_eps", "weighted_vary_eps"]
     
     N_SO_FAR = 0
-    N_REPEATS = 2
+    N_REPEATS = 1
 
     ## TODO : fix h params
-    lr_bs_eps = (0.001, 4, 240)
+    lr_bs_eps = (0.0001, 8, 200)
 
     number_samples = -1 # e.g. all
 

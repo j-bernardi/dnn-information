@@ -52,11 +52,17 @@ def define_experiment(test_small_slurm=False):
     more_8s = [(0.00005, 8, 220), 
                (0.00009, 8, 160)]
 
-    a_12 = [(0.0001, 12, 160)]
+    a_12 = [(0.0001, 12, 180)]
+
+    test_8s = [(0.0001, 8, 60),
+               (0.0001, 8, 90),
+               (0.0001, 8, 120),
+               (0.0001, 8, 180),
+               (0.0001, 8, 220)]
 
     # DEFINE
     cln_types = ["loss"]#, "no_clean"]
-    lr_bs_eps = [more_8s[1]]
+    lr_bs_eps = [test_8s[4]]
     #lr_bs_eps = lr_4_eps + lr_6_eps
     #lr_bs_eps = lr_2_eps + lr_4_eps
 
@@ -71,7 +77,7 @@ def define_experiment(test_small_slurm=False):
         print("TEMP number of samples 5")
         print("************************")
 
-        lr_bs_eps = [(0.002, 1, 3), (0.0001, 1, 2)]#, (0.002, 1, 1)]#2)]
+        lr_bs_eps = [(0.0001    , 1, 1), (0.0001, 1, 2)]#, (0.002, 1, 1)]#2)]
         number_samples = 5
         cln_types = ["loss"]
 
@@ -146,7 +152,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
 
     return fn, acc, central_acc
 
-def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,10)):
+def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,14)):
     """Makes an ordered plot of y on x."""
     
     ordered_y = [i for _, i in sorted(zip(x, y))]
@@ -154,15 +160,22 @@ def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,10)):
 
     # PLOT BS
     plt.figure()
-    plt.scatter(ordered_x, ordered_y, marker='x')
+    if "epoch" in title.lower():
+        plt.plot(ordered_x, ordered_y, 'bx')
+        plt.title(acc_type + " accuracy on " + title + " - lr=1e-4, bs=8")
+    else:
+        plt.scatter(ordered_x, ordered_y, marker='x')
+        plt.title(acc_type + " accuracy on " + title)
+    
     plt.xlim(xlim)
-    plt.title("Accuracy on " + title)
+    
     if "learning" in title.lower():
         plt.xlabel("Learning rate_0 (10^-3)")
     else:
         plt.xlabel(title)
+    
     plt.ylabel("Accuracy")
-    plt.savefig(experiment_folder + acc_type+ "_accuracy_on" + title.lower().replace(" ", "_") + ".png")
+    plt.savefig(experiment_folder + acc_type+ "_accuracy_on_" + title.lower().replace(" ", "_") + ".png")
     plt.close()
 
 def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
@@ -179,7 +192,7 @@ def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
     plt.xlabel("LR_0 (10^-3)")
     plt.xlim((0, 2))
     plt.ylabel("Batch Size")
-    plt.ylim((0, 10))
+    plt.ylim((0, 14))
     plt.savefig(experiment_folder + title.lower().replace(" ", "_") + "_grid.png")
     plt.close()
 
@@ -303,6 +316,12 @@ if __name__ == "__main__":
             make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
             make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
             make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
+            
+            try:
+                make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 240))
+                make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 240))
+            except:
+                print("UNTESTED failure.")
 
             # PLOT PARAMETER SEARCH GRID
             make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)
