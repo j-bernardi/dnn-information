@@ -26,7 +26,7 @@ def initialise_model(params):
             model = ts.load_model(params, experiment_folder="no", save_reps=False)
             torch.save(model.state_dict(), "models/unet/saved_models/initialisation.pth")
 
-def define_experiment(test_small_slurm=False):
+def define_experiment(test_small_slurm=True):
 
     # DEFINE
     cln_type = "loss"
@@ -37,7 +37,7 @@ def define_experiment(test_small_slurm=False):
     N_REPEATS = 1
 
     ## TODO : fix h params
-    lr_bs_eps = (0.0001, 8, 200)
+    lr_bs_eps = (0.0001, 8, 180)
 
     number_samples = -1 # e.g. all
 
@@ -49,8 +49,9 @@ def define_experiment(test_small_slurm=False):
         print("************************")
         print("TEMP number of samples 5")
         print("************************")
-        smoothing_types = ["none", "uniform_fixed_eps"]    
-        lr_bs_eps = (0.02, 1, 2)
+        #smoothing_types = ["none", "uniform_fixed_eps"]    
+        smoothing_types = ["uniform_vary_eps"]
+        lr_bs_eps = (0.02, 1, 1)
         number_samples = 5
     
     # If doing small slurm
@@ -59,8 +60,8 @@ def define_experiment(test_small_slurm=False):
         print("*******************")
         print("TESTING SMALL SCALE")
         print("*******************")
-
-        lr_bs_eps = (0.005, 4, 2)
+        smoothing_types = ["uniform_vary_eps", "weighted_fixed_eps", "weighted_vary_eps"]
+        lr_bs_eps = (0.0001, 8, 2)
 
     return lr_bs_eps, number_samples, cln_type, smoothing_types, (N_SO_FAR, N_REPEATS)
 
@@ -268,7 +269,7 @@ if __name__ == "__main__":
         for smoothing_type in smoothing_types:
 
             # Time the run
-            print("\nRunning smoothing type", smoothing_type, "at", datetime.datetime.now())
+            print("\nRunning smoothing type", smoothing_type, "at", datetime.datetime.now(), "\n")
             TIME_RUN = time.time()
 
             # Set the smoothing type

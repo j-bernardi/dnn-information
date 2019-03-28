@@ -1,0 +1,1333 @@
+Changed directory to /home/jhb57/dnn-information.
+
+JobID: 10300969
+======
+Time: Wed 27 Mar 14:58:51 GMT 2019
+Running on master node: gpu-e-52
+Current directory: /home/jhb57/dnn-information
+
+Nodes allocated:
+================
+gpu-e-52 gpu-e-53
+
+numtasks=8, numnodes=2, mpi_tasks_per_node=4 (OMP_NUM_THREADS=1)
+
+Executing command:
+==================
+python /home/jhb57/dnn-information/experiments/initialising_loss0.py 
+
+Script started at 2019-03-27 14:59:00.104327
+appending /home/jhb57/dnn-information/models/unet
+Initialisation time 3.286 secs
+
+Running clean type loss
+This clean type initialisation time 0.006 secs
+
+Starting at 2019-03-27 14:59:03.396175 with lr 2e-05 - bs 8 - epochs 200 
+
+Appending /home/jhb57/dnn-information
+Loading images
+Data shape (110, 768, 512)
+Label shape (110, 2, 768, 512)
+No cleaning in data load
+Loaded.
+len trainset 11
+len testset 3
+Info layers numbers [0, 6, 12, 18, 24, 30, 36, 42, 48, 54]
+Let's use 4 GPUs!
+Moving model to cuda:0
+Updating at img [    0  1760  3520  8800 12320 15840 16720]
+Updating to lrs [2.00000e-05 1.00000e-05 5.00000e-06 2.50000e-06 3.12500e-07 7.81250e-08
+ 3.90625e-08]
+Starting training.
+UPDATING LR 2e-05
+APPLIED uniform fixed epsilon.
+argmax (256, 150 ) tensor(1, device='cuda:0')
+old_hot (256, 150 ) tensor([0., 1., 0., 0., 0., 0., 0., 0., 0.], device='cuda:0')
+one_hot (256, 150 ) tensor([0.0125, 0.9000, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125],
+       device='cuda:0')
+argmax (256, 175 ) tensor(3, device='cuda:0')
+old_hot (256, 175 ) tensor([0., 0., 0., 1., 0., 0., 0., 0., 0.], device='cuda:0')
+one_hot (256, 175 ) tensor([0.0125, 0.0125, 0.0125, 0.9000, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125],
+       device='cuda:0')
+argmax (256, 200 ) tensor(5, device='cuda:0')
+old_hot (256, 200 ) tensor([0., 0., 0., 0., 0., 1., 0., 0., 0.], device='cuda:0')
+one_hot (256, 200 ) tensor([0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.9000, 0.0125, 0.0125, 0.0125],
+       device='cuda:0')
+argmax (256, 225 ) tensor(7, device='cuda:0')
+old_hot (256, 225 ) tensor([0., 0., 0., 0., 0., 0., 0., 1., 0.], device='cuda:0')
+one_hot (256, 225 ) tensor([0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.9000, 0.0125],
+       device='cuda:0')
+argmax (256, 250 ) tensor(8, device='cuda:0')
+old_hot (256, 250 ) tensor([0., 0., 0., 0., 0., 0., 0., 0., 1.], device='cuda:0')
+one_hot (256, 250 ) tensor([0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.9000],
+       device='cuda:0')
+argmax (256, 275 ) tensor(8, device='cuda:0')
+old_hot (256, 275 ) tensor([0., 0., 0., 0., 0., 0., 0., 0., 1.], device='cuda:0')
+one_hot (256, 275 ) tensor([0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.9000],
+       device='cuda:0')
+argmax (256, 300 ) tensor(8, device='cuda:0')
+old_hot (256, 300 ) tensor([0., 0., 0., 0., 0., 0., 0., 0., 1.], device='cuda:0')
+one_hot (256, 300 ) tensor([0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.9000],
+       device='cuda:0')
+argmax (256, 325 ) tensor(8, device='cuda:0')
+old_hot (256, 325 ) tensor([0., 0., 0., 0., 0., 0., 0., 0., 1.], device='cuda:0')
+one_hot (256, 325 ) tensor([0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.9000],
+       device='cuda:0')
+Using one hot
+ tensor([0.9000, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125, 0.0125],
+       device='cuda:0')
+ENTERING loss cleaning.
+Cleaning by ignoring loss
+[1,     2] loss / pixel: 13.32851
+[1,     4] loss / pixel: 13.35061
+[1,     6] loss / pixel: 13.23815
+[1,     8] loss / pixel: 13.29091
+[1,    10] loss / pixel: 13.04076
+[Epoch 1 complete] mean loss / pixel: 13.227, accuracy 6.676%, dt 2019-03-27 14:59:56.366787
+[2,     2] loss / pixel: 12.91708
+[2,     4] loss / pixel: 12.93693
+[2,     6] loss / pixel: 12.72302
+[2,     8] loss / pixel: 12.59269
+[2,    10] loss / pixel: 12.48396
+[Epoch 2 complete] mean loss / pixel: 12.661, accuracy 11.179%, dt 2019-03-27 15:00:27.479016
+[3,     2] loss / pixel: 12.21412
+[3,     4] loss / pixel: 12.42218
+[3,     6] loss / pixel: 12.31525
+[3,     8] loss / pixel: 11.95347
+[3,    10] loss / pixel: 12.35090
+[Epoch 3 complete] mean loss / pixel: 12.214, accuracy 16.739%, dt 2019-03-27 15:00:58.752434
+[4,     2] loss / pixel: 12.03531
+[4,     4] loss / pixel: 12.03590
+[4,     6] loss / pixel: 12.00889
+[4,     8] loss / pixel: 11.70575
+[4,    10] loss / pixel: 11.61523
+[Epoch 4 complete] mean loss / pixel: 11.867, accuracy 24.919%, dt 2019-03-27 15:01:28.932710
+[5,     2] loss / pixel: 11.54953
+[5,     4] loss / pixel: 11.35222
+[5,     6] loss / pixel: 11.64649
+[5,     8] loss / pixel: 11.47240
+[5,    10] loss / pixel: 11.55678
+[Epoch 5 complete] mean loss / pixel: 11.529, accuracy 41.100%, dt 2019-03-27 15:01:59.617476
+[6,     2] loss / pixel: 11.45262
+[6,     4] loss / pixel: 11.24515
+[6,     6] loss / pixel: 11.24024
+[6,     8] loss / pixel: 11.37571
+[6,    10] loss / pixel: 11.17840
+[Epoch 6 complete] mean loss / pixel: 11.286, accuracy 61.553%, dt 2019-03-27 15:02:31.257352
+[7,     2] loss / pixel: 11.21488
+[7,     4] loss / pixel: 10.90919
+[7,     6] loss / pixel: 11.25254
+[7,     8] loss / pixel: 10.94620
+[7,    10] loss / pixel: 11.16514
+[Epoch 7 complete] mean loss / pixel: 11.096, accuracy 73.402%, dt 2019-03-27 15:03:03.514111
+[8,     2] loss / pixel: 11.20785
+[8,     4] loss / pixel: 11.02999
+[8,     6] loss / pixel: 11.09806
+[8,     8] loss / pixel: 10.76370
+[8,    10] loss / pixel: 10.57699
+[Epoch 8 complete] mean loss / pixel: 10.950, accuracy 76.866%, dt 2019-03-27 15:03:34.570510
+[9,     2] loss / pixel: 10.88040
+[9,     4] loss / pixel: 11.17542
+[9,     6] loss / pixel: 10.63397
+[9,     8] loss / pixel: 11.10268
+[9,    10] loss / pixel: 10.49037
+[Epoch 9 complete] mean loss / pixel: 10.856, accuracy 78.977%, dt 2019-03-27 15:04:06.080400
+[10,     2] loss / pixel: 10.80111
+[10,     4] loss / pixel: 10.86312
+[10,     6] loss / pixel: 11.05787
+[10,     8] loss / pixel: 10.25257
+[10,    10] loss / pixel: 10.70288
+[Epoch 10 complete] mean loss / pixel: 10.770, accuracy 80.663%, dt 2019-03-27 15:04:38.034059
+[11,     2] loss / pixel: 10.52436
+[11,     4] loss / pixel: 10.77710
+[11,     6] loss / pixel: 10.90232
+[11,     8] loss / pixel: 10.39410
+[11,    10] loss / pixel: 10.90971
+[Epoch 11 complete] mean loss / pixel: 10.695, accuracy 82.217%, dt 2019-03-27 15:05:08.717782
+[12,     2] loss / pixel: 10.48866
+[12,     4] loss / pixel: 10.57943
+[12,     6] loss / pixel: 10.44246
+[12,     8] loss / pixel: 10.77842
+[12,    10] loss / pixel: 10.80230
+[Epoch 12 complete] mean loss / pixel: 10.630, accuracy 83.562%, dt 2019-03-27 15:05:40.253747
+[13,     2] loss / pixel: 10.76927
+[13,     4] loss / pixel: 10.58086
+[13,     6] loss / pixel: 10.40236
+[13,     8] loss / pixel: 10.67609
+[13,    10] loss / pixel: 10.54437
+[Epoch 13 complete] mean loss / pixel: 10.580, accuracy 84.507%, dt 2019-03-27 15:06:11.390388
+[14,     2] loss / pixel: 10.76748
+[14,     4] loss / pixel: 10.45433
+[14,     6] loss / pixel: 10.37752
+[14,     8] loss / pixel: 10.56362
+[14,    10] loss / pixel: 10.52201
+[Epoch 14 complete] mean loss / pixel: 10.550, accuracy 85.537%, dt 2019-03-27 15:06:41.983127
+[15,     2] loss / pixel: 10.48909
+[15,     4] loss / pixel: 10.48456
+[15,     6] loss / pixel: 10.58593
+[15,     8] loss / pixel: 10.54657
+[15,    10] loss / pixel: 10.50418
+[Epoch 15 complete] mean loss / pixel: 10.519, accuracy 86.362%, dt 2019-03-27 15:07:13.428597
+[16,     2] loss / pixel: 10.54068
+[16,     4] loss / pixel: 10.62505
+[16,     6] loss / pixel: 10.21794
+[16,     8] loss / pixel: 10.56957
+[16,    10] loss / pixel: 10.63148
+[Epoch 16 complete] mean loss / pixel: 10.484, accuracy 87.084%, dt 2019-03-27 15:07:44.043170
+[17,     2] loss / pixel: 10.58705
+[17,     4] loss / pixel: 10.16692
+[17,     6] loss / pixel: 10.26298
+[17,     8] loss / pixel: 10.56331
+[17,    10] loss / pixel: 10.79374
+[Epoch 17 complete] mean loss / pixel: 10.450, accuracy 88.019%, dt 2019-03-27 15:08:16.142709
+[18,     2] loss / pixel: 10.53639
+[18,     4] loss / pixel: 10.42513
+[18,     6] loss / pixel: 10.33296
+[18,     8] loss / pixel: 10.73429
+[18,    10] loss / pixel: 10.37763
+[Epoch 18 complete] mean loss / pixel: 10.429, accuracy 88.566%, dt 2019-03-27 15:08:47.031059
+[19,     2] loss / pixel: 10.48379
+[19,     4] loss / pixel: 10.46937
+[19,     6] loss / pixel: 10.43196
+[19,     8] loss / pixel: 10.47462
+[19,    10] loss / pixel: 10.23921
+[Epoch 19 complete] mean loss / pixel: 10.405, accuracy 89.418%, dt 2019-03-27 15:09:18.790402
+[20,     2] loss / pixel: 10.59057
+[20,     4] loss / pixel: 10.35427
+[20,     6] loss / pixel: 10.53782
+[20,     8] loss / pixel: 10.35614
+[20,    10] loss / pixel: 10.19467
+[Epoch 20 complete] mean loss / pixel: 10.390, accuracy 89.586%, dt 2019-03-27 15:09:49.223772
+UPDATING LR 1e-05
+[21,     2] loss / pixel: 10.65520
+[21,     4] loss / pixel: 10.15781
+[21,     6] loss / pixel: 10.28969
+[21,     8] loss / pixel: 10.30690
+[21,    10] loss / pixel: 10.41165
+[Epoch 21 complete] mean loss / pixel: 10.368, accuracy 90.201%, dt 2019-03-27 15:10:20.685859
+[22,     2] loss / pixel: 10.43857
+[22,     4] loss / pixel: 10.24634
+[22,     6] loss / pixel: 10.49876
+[22,     8] loss / pixel: 10.47598
+[22,    10] loss / pixel: 10.17331
+[Epoch 22 complete] mean loss / pixel: 10.358, accuracy 90.253%, dt 2019-03-27 15:10:51.635428
+[23,     2] loss / pixel: 10.57058
+[23,     4] loss / pixel: 10.36230
+[23,     6] loss / pixel: 10.22622
+[23,     8] loss / pixel: 9.99571
+[23,    10] loss / pixel: 10.52751
+[Epoch 23 complete] mean loss / pixel: 10.346, accuracy 90.597%, dt 2019-03-27 15:11:22.491667
+[24,     2] loss / pixel: 10.43053
+[24,     4] loss / pixel: 10.10220
+[24,     6] loss / pixel: 10.34433
+[24,     8] loss / pixel: 10.47865
+[24,    10] loss / pixel: 10.36067
+[Epoch 24 complete] mean loss / pixel: 10.333, accuracy 90.716%, dt 2019-03-27 15:11:52.430364
+[25,     2] loss / pixel: 10.31210
+[25,     4] loss / pixel: 9.89702
+[25,     6] loss / pixel: 10.28245
+[25,     8] loss / pixel: 10.65134
+[25,    10] loss / pixel: 10.53245
+[Epoch 25 complete] mean loss / pixel: 10.329, accuracy 90.685%, dt 2019-03-27 15:12:24.051437
+[26,     2] loss / pixel: 10.18880
+[26,     4] loss / pixel: 10.53494
+[26,     6] loss / pixel: 10.52656
+[26,     8] loss / pixel: 10.42497
+[26,    10] loss / pixel: 10.01065
+[Epoch 26 complete] mean loss / pixel: 10.318, accuracy 91.461%, dt 2019-03-27 15:12:54.805668
+[27,     2] loss / pixel: 10.33474
+[27,     4] loss / pixel: 10.65413
+[27,     6] loss / pixel: 10.12330
+[27,     8] loss / pixel: 10.29767
+[27,    10] loss / pixel: 10.12676
+[Epoch 27 complete] mean loss / pixel: 10.307, accuracy 91.311%, dt 2019-03-27 15:13:26.112658
+[28,     2] loss / pixel: 10.08123
+[28,     4] loss / pixel: 10.24502
+[28,     6] loss / pixel: 10.50418
+[28,     8] loss / pixel: 10.36694
+[28,    10] loss / pixel: 10.28630
+[Epoch 28 complete] mean loss / pixel: 10.300, accuracy 91.405%, dt 2019-03-27 15:13:57.279634
+[29,     2] loss / pixel: 10.05137
+[29,     4] loss / pixel: 10.34623
+[29,     6] loss / pixel: 10.33633
+[29,     8] loss / pixel: 10.23409
+[29,    10] loss / pixel: 10.47231
+[Epoch 29 complete] mean loss / pixel: 10.291, accuracy 91.725%, dt 2019-03-27 15:14:28.454573
+[30,     2] loss / pixel: 10.20765
+[30,     4] loss / pixel: 10.46981
+[30,     6] loss / pixel: 10.22485
+[30,     8] loss / pixel: 10.15549
+[30,    10] loss / pixel: 10.30906
+[Epoch 30 complete] mean loss / pixel: 10.287, accuracy 91.669%, dt 2019-03-27 15:14:59.531459
+[31,     2] loss / pixel: 10.47473
+[31,     4] loss / pixel: 10.14511
+[31,     6] loss / pixel: 10.41631
+[31,     8] loss / pixel: 10.14788
+[31,    10] loss / pixel: 10.18311
+[Epoch 31 complete] mean loss / pixel: 10.280, accuracy 92.091%, dt 2019-03-27 15:15:30.768942
+[32,     2] loss / pixel: 10.25090
+[32,     4] loss / pixel: 10.00614
+[32,     6] loss / pixel: 10.07360
+[32,     8] loss / pixel: 10.45499
+[32,    10] loss / pixel: 10.58139
+[Epoch 32 complete] mean loss / pixel: 10.273, accuracy 91.694%, dt 2019-03-27 15:16:02.819998
+[33,     2] loss / pixel: 10.43202
+[33,     4] loss / pixel: 10.43727
+[33,     6] loss / pixel: 10.27467
+[33,     8] loss / pixel: 10.18173
+[33,    10] loss / pixel: 10.15410
+[Epoch 33 complete] mean loss / pixel: 10.266, accuracy 92.188%, dt 2019-03-27 15:16:34.413063
+[34,     2] loss / pixel: 10.06169
+[34,     4] loss / pixel: 10.51730
+[34,     6] loss / pixel: 10.23632
+[34,     8] loss / pixel: 10.25270
+[34,    10] loss / pixel: 10.19913
+[Epoch 34 complete] mean loss / pixel: 10.266, accuracy 91.973%, dt 2019-03-27 15:17:05.224612
+[35,     2] loss / pixel: 10.11929
+[35,     4] loss / pixel: 10.32777
+[35,     6] loss / pixel: 10.54328
+[35,     8] loss / pixel: 10.15610
+[35,    10] loss / pixel: 10.26264
+[Epoch 35 complete] mean loss / pixel: 10.261, accuracy 92.284%, dt 2019-03-27 15:17:35.894859
+[36,     2] loss / pixel: 10.12639
+[36,     4] loss / pixel: 10.17824
+[36,     6] loss / pixel: 10.35300
+[36,     8] loss / pixel: 10.38435
+[36,    10] loss / pixel: 10.17027
+[Epoch 36 complete] mean loss / pixel: 10.250, accuracy 92.549%, dt 2019-03-27 15:18:07.575168
+[37,     2] loss / pixel: 10.00561
+[37,     4] loss / pixel: 10.19121
+[37,     6] loss / pixel: 10.31304
+[37,     8] loss / pixel: 10.37217
+[37,    10] loss / pixel: 10.33187
+[Epoch 37 complete] mean loss / pixel: 10.243, accuracy 92.641%, dt 2019-03-27 15:18:39.269028
+[38,     2] loss / pixel: 10.39080
+[38,     4] loss / pixel: 10.21736
+[38,     6] loss / pixel: 10.01082
+[38,     8] loss / pixel: 10.32363
+[38,    10] loss / pixel: 10.42143
+[Epoch 38 complete] mean loss / pixel: 10.236, accuracy 92.714%, dt 2019-03-27 15:19:10.123041
+[39,     2] loss / pixel: 10.20764
+[39,     4] loss / pixel: 10.00139
+[39,     6] loss / pixel: 10.21945
+[39,     8] loss / pixel: 9.95430
+[39,    10] loss / pixel: 10.64607
+[Epoch 39 complete] mean loss / pixel: 10.225, accuracy 93.067%, dt 2019-03-27 15:19:41.688729
+[40,     2] loss / pixel: 10.02806
+[40,     4] loss / pixel: 10.41875
+[40,     6] loss / pixel: 9.98450
+[40,     8] loss / pixel: 10.15118
+[40,    10] loss / pixel: 10.46649
+[Epoch 40 complete] mean loss / pixel: 10.223, accuracy 93.101%, dt 2019-03-27 15:20:13.254561
+UPDATING LR 5e-06
+[41,     2] loss / pixel: 10.07426
+[41,     4] loss / pixel: 9.98463
+[41,     6] loss / pixel: 10.43113
+[41,     8] loss / pixel: 10.30351
+[41,    10] loss / pixel: 10.17821
+[Epoch 41 complete] mean loss / pixel: 10.214, accuracy 92.798%, dt 2019-03-27 15:20:44.376471
+[42,     2] loss / pixel: 10.07757
+[42,     4] loss / pixel: 10.20109
+[42,     6] loss / pixel: 10.30014
+[42,     8] loss / pixel: 10.24271
+[42,    10] loss / pixel: 10.38984
+[Epoch 42 complete] mean loss / pixel: 10.213, accuracy 92.902%, dt 2019-03-27 15:21:15.775972
+[43,     2] loss / pixel: 10.37867
+[43,     4] loss / pixel: 10.13961
+[43,     6] loss / pixel: 10.40543
+[43,     8] loss / pixel: 10.03568
+[43,    10] loss / pixel: 9.90453
+[Epoch 43 complete] mean loss / pixel: 10.206, accuracy 93.329%, dt 2019-03-27 15:21:47.027861
+[44,     2] loss / pixel: 10.18215
+[44,     4] loss / pixel: 10.20877
+[44,     6] loss / pixel: 10.16841
+[44,     8] loss / pixel: 10.40546
+[44,    10] loss / pixel: 10.14567
+[Epoch 44 complete] mean loss / pixel: 10.205, accuracy 92.962%, dt 2019-03-27 15:22:18.325563
+[45,     2] loss / pixel: 10.40163
+[45,     4] loss / pixel: 9.93846
+[45,     6] loss / pixel: 10.25950
+[45,     8] loss / pixel: 10.03189
+[45,    10] loss / pixel: 10.32739
+[Epoch 45 complete] mean loss / pixel: 10.199, accuracy 93.399%, dt 2019-03-27 15:22:49.395990
+[46,     2] loss / pixel: 10.11457
+[46,     4] loss / pixel: 10.17881
+[46,     6] loss / pixel: 9.97158
+[46,     8] loss / pixel: 10.56635
+[46,    10] loss / pixel: 10.27656
+[Epoch 46 complete] mean loss / pixel: 10.197, accuracy 93.216%, dt 2019-03-27 15:23:21.111683
+[47,     2] loss / pixel: 10.30174
+[47,     4] loss / pixel: 10.40827
+[47,     6] loss / pixel: 10.25232
+[47,     8] loss / pixel: 10.13362
+[47,    10] loss / pixel: 10.10697
+[Epoch 47 complete] mean loss / pixel: 10.198, accuracy 93.393%, dt 2019-03-27 15:23:52.946427
+[48,     2] loss / pixel: 10.28999
+[48,     4] loss / pixel: 10.07631
+[48,     6] loss / pixel: 10.32977
+[48,     8] loss / pixel: 10.24757
+[48,    10] loss / pixel: 10.06476
+[Epoch 48 complete] mean loss / pixel: 10.193, accuracy 93.422%, dt 2019-03-27 15:24:25.174852
+[49,     2] loss / pixel: 10.24828
+[49,     4] loss / pixel: 10.51073
+[49,     6] loss / pixel: 10.37708
+[49,     8] loss / pixel: 10.02554
+[49,    10] loss / pixel: 9.81280
+[Epoch 49 complete] mean loss / pixel: 10.191, accuracy 93.272%, dt 2019-03-27 15:24:57.098405
+[50,     2] loss / pixel: 10.09028
+[50,     4] loss / pixel: 10.35836
+[50,     6] loss / pixel: 10.12175
+[50,     8] loss / pixel: 10.08138
+[50,    10] loss / pixel: 10.09199
+[Epoch 50 complete] mean loss / pixel: 10.190, accuracy 93.534%, dt 2019-03-27 15:25:27.481333
+[51,     2] loss / pixel: 10.05989
+[51,     4] loss / pixel: 10.13937
+[51,     6] loss / pixel: 10.43335
+[51,     8] loss / pixel: 10.27092
+[51,    10] loss / pixel: 9.94257
+[Epoch 51 complete] mean loss / pixel: 10.183, accuracy 93.370%, dt 2019-03-27 15:25:59.537435
+[52,     2] loss / pixel: 10.26423
+[52,     4] loss / pixel: 10.17841
+[52,     6] loss / pixel: 10.12668
+[52,     8] loss / pixel: 10.14415
+[52,    10] loss / pixel: 10.06639
+[Epoch 52 complete] mean loss / pixel: 10.182, accuracy 93.457%, dt 2019-03-27 15:26:31.055431
+[53,     2] loss / pixel: 10.35443
+[53,     4] loss / pixel: 10.20395
+[53,     6] loss / pixel: 10.32422
+[53,     8] loss / pixel: 10.15851
+[53,    10] loss / pixel: 9.89452
+[Epoch 53 complete] mean loss / pixel: 10.178, accuracy 93.838%, dt 2019-03-27 15:27:02.046200
+[54,     2] loss / pixel: 10.19714
+[54,     4] loss / pixel: 10.09353
+[54,     6] loss / pixel: 10.03030
+[54,     8] loss / pixel: 10.28779
+[54,    10] loss / pixel: 10.09648
+[Epoch 54 complete] mean loss / pixel: 10.177, accuracy 93.393%, dt 2019-03-27 15:27:34.220144
+[55,     2] loss / pixel: 10.22790
+[55,     4] loss / pixel: 10.41757
+[55,     6] loss / pixel: 9.85307
+[55,     8] loss / pixel: 10.24692
+[55,    10] loss / pixel: 10.12343
+[Epoch 55 complete] mean loss / pixel: 10.174, accuracy 93.566%, dt 2019-03-27 15:28:06.099799
+[56,     2] loss / pixel: 10.00585
+[56,     4] loss / pixel: 10.31528
+[56,     6] loss / pixel: 10.06115
+[56,     8] loss / pixel: 10.10019
+[56,    10] loss / pixel: 10.30706
+[Epoch 56 complete] mean loss / pixel: 10.170, accuracy 93.997%, dt 2019-03-27 15:28:37.788287
+[57,     2] loss / pixel: 10.37404
+[57,     4] loss / pixel: 10.22421
+[57,     6] loss / pixel: 10.15916
+[57,     8] loss / pixel: 10.29479
+[57,    10] loss / pixel: 9.80865
+[Epoch 57 complete] mean loss / pixel: 10.166, accuracy 93.946%, dt 2019-03-27 15:29:08.369419
+[58,     2] loss / pixel: 10.23831
+[58,     4] loss / pixel: 9.77564
+[58,     6] loss / pixel: 10.23818
+[58,     8] loss / pixel: 10.21126
+[58,    10] loss / pixel: 10.49341
+[Epoch 58 complete] mean loss / pixel: 10.166, accuracy 93.604%, dt 2019-03-27 15:29:39.793592
+[59,     2] loss / pixel: 9.64241
+[59,     4] loss / pixel: 10.43216
+[59,     6] loss / pixel: 10.18717
+[59,     8] loss / pixel: 10.52060
+[59,    10] loss / pixel: 10.03813
+[Epoch 59 complete] mean loss / pixel: 10.166, accuracy 93.889%, dt 2019-03-27 15:30:11.722571
+[60,     2] loss / pixel: 10.23092
+[60,     4] loss / pixel: 10.01956
+[60,     6] loss / pixel: 10.12943
+[60,     8] loss / pixel: 10.08099
+[60,    10] loss / pixel: 10.22109
+[Epoch 60 complete] mean loss / pixel: 10.163, accuracy 93.918%, dt 2019-03-27 15:30:43.813802
+[61,     2] loss / pixel: 10.21484
+[61,     4] loss / pixel: 10.16984
+[61,     6] loss / pixel: 10.47055
+[61,     8] loss / pixel: 9.89872
+[61,    10] loss / pixel: 9.97181
+[Epoch 61 complete] mean loss / pixel: 10.158, accuracy 94.035%, dt 2019-03-27 15:31:14.632024
+[62,     2] loss / pixel: 9.93006
+[62,     4] loss / pixel: 10.25443
+[62,     6] loss / pixel: 9.95834
+[62,     8] loss / pixel: 10.27646
+[62,    10] loss / pixel: 10.26448
+[Epoch 62 complete] mean loss / pixel: 10.156, accuracy 94.077%, dt 2019-03-27 15:31:45.671990
+[63,     2] loss / pixel: 9.92247
+[63,     4] loss / pixel: 10.33505
+[63,     6] loss / pixel: 10.01057
+[63,     8] loss / pixel: 10.01391
+[63,    10] loss / pixel: 10.33117
+[Epoch 63 complete] mean loss / pixel: 10.152, accuracy 94.094%, dt 2019-03-27 15:32:17.213115
+[64,     2] loss / pixel: 10.20699
+[64,     4] loss / pixel: 10.19192
+[64,     6] loss / pixel: 10.15368
+[64,     8] loss / pixel: 10.07389
+[64,    10] loss / pixel: 10.29528
+[Epoch 64 complete] mean loss / pixel: 10.153, accuracy 94.010%, dt 2019-03-27 15:32:48.441132
+[65,     2] loss / pixel: 9.93845
+[65,     4] loss / pixel: 10.29326
+[65,     6] loss / pixel: 10.20937
+[65,     8] loss / pixel: 9.81012
+[65,    10] loss / pixel: 10.32467
+[Epoch 65 complete] mean loss / pixel: 10.148, accuracy 94.215%, dt 2019-03-27 15:33:20.606289
+[66,     2] loss / pixel: 10.16218
+[66,     4] loss / pixel: 10.07515
+[66,     6] loss / pixel: 10.01200
+[66,     8] loss / pixel: 10.29254
+[66,    10] loss / pixel: 10.26235
+[Epoch 66 complete] mean loss / pixel: 10.145, accuracy 94.112%, dt 2019-03-27 15:33:52.586144
+[67,     2] loss / pixel: 10.19559
+[67,     4] loss / pixel: 10.06817
+[67,     6] loss / pixel: 10.29411
+[67,     8] loss / pixel: 10.20174
+[67,    10] loss / pixel: 10.16094
+[Epoch 67 complete] mean loss / pixel: 10.142, accuracy 94.040%, dt 2019-03-27 15:34:22.786233
+[68,     2] loss / pixel: 9.97734
+[68,     4] loss / pixel: 10.33001
+[68,     6] loss / pixel: 10.16482
+[68,     8] loss / pixel: 10.02257
+[68,    10] loss / pixel: 10.31485
+[Epoch 68 complete] mean loss / pixel: 10.136, accuracy 94.400%, dt 2019-03-27 15:34:53.613752
+[69,     2] loss / pixel: 10.51661
+[69,     4] loss / pixel: 10.15683
+[69,     6] loss / pixel: 10.01743
+[69,     8] loss / pixel: 10.00942
+[69,    10] loss / pixel: 9.85400
+[Epoch 69 complete] mean loss / pixel: 10.135, accuracy 94.370%, dt 2019-03-27 15:35:25.313470
+[70,     2] loss / pixel: 10.19697
+[70,     4] loss / pixel: 10.32968
+[70,     6] loss / pixel: 9.94939
+[70,     8] loss / pixel: 9.94791
+[70,    10] loss / pixel: 10.19821
+[Epoch 70 complete] mean loss / pixel: 10.140, accuracy 94.133%, dt 2019-03-27 15:35:56.212225
+[71,     2] loss / pixel: 10.07228
+[71,     4] loss / pixel: 10.12027
+[71,     6] loss / pixel: 10.08709
+[71,     8] loss / pixel: 10.18255
+[71,    10] loss / pixel: 10.42291
+[Epoch 71 complete] mean loss / pixel: 10.133, accuracy 94.538%, dt 2019-03-27 15:36:27.192082
+[72,     2] loss / pixel: 10.28077
+[72,     4] loss / pixel: 10.14869
+[72,     6] loss / pixel: 10.08083
+[72,     8] loss / pixel: 9.92207
+[72,    10] loss / pixel: 10.16120
+[Epoch 72 complete] mean loss / pixel: 10.131, accuracy 94.524%, dt 2019-03-27 15:36:57.055406
+[73,     2] loss / pixel: 10.23427
+[73,     4] loss / pixel: 9.98566
+[73,     6] loss / pixel: 10.44246
+[73,     8] loss / pixel: 9.87822
+[73,    10] loss / pixel: 10.08483
+[Epoch 73 complete] mean loss / pixel: 10.131, accuracy 94.305%, dt 2019-03-27 15:37:27.531639
+[74,     2] loss / pixel: 10.34290
+[74,     4] loss / pixel: 10.31530
+[74,     6] loss / pixel: 9.78524
+[74,     8] loss / pixel: 10.04096
+[74,    10] loss / pixel: 10.03660
+[Epoch 74 complete] mean loss / pixel: 10.127, accuracy 94.518%, dt 2019-03-27 15:37:57.547196
+[75,     2] loss / pixel: 10.10287
+[75,     4] loss / pixel: 10.17293
+[75,     6] loss / pixel: 10.23162
+[75,     8] loss / pixel: 10.06657
+[75,    10] loss / pixel: 10.04553
+[Epoch 75 complete] mean loss / pixel: 10.122, accuracy 94.827%, dt 2019-03-27 15:38:29.032774
+[76,     2] loss / pixel: 9.99399
+[76,     4] loss / pixel: 10.19049
+[76,     6] loss / pixel: 10.12975
+[76,     8] loss / pixel: 10.08232
+[76,    10] loss / pixel: 10.05964
+[Epoch 76 complete] mean loss / pixel: 10.118, accuracy 94.817%, dt 2019-03-27 15:38:59.274653
+[77,     2] loss / pixel: 10.30097
+[77,     4] loss / pixel: 10.02859
+[77,     6] loss / pixel: 10.29727
+[77,     8] loss / pixel: 9.89373
+[77,    10] loss / pixel: 10.00150
+[Epoch 77 complete] mean loss / pixel: 10.116, accuracy 94.959%, dt 2019-03-27 15:39:30.060602
+[78,     2] loss / pixel: 9.90587
+[78,     4] loss / pixel: 10.19738
+[78,     6] loss / pixel: 10.17803
+[78,     8] loss / pixel: 10.06339
+[78,    10] loss / pixel: 10.17676
+[Epoch 78 complete] mean loss / pixel: 10.113, accuracy 94.974%, dt 2019-03-27 15:40:00.924175
+[79,     2] loss / pixel: 10.01452
+[79,     4] loss / pixel: 10.00877
+[79,     6] loss / pixel: 10.28817
+[79,     8] loss / pixel: 10.00668
+[79,    10] loss / pixel: 10.20157
+[Epoch 79 complete] mean loss / pixel: 10.115, accuracy 94.673%, dt 2019-03-27 15:40:32.614292
+[80,     2] loss / pixel: 10.26423
+[80,     4] loss / pixel: 9.89902
+[80,     6] loss / pixel: 10.09609
+[80,     8] loss / pixel: 10.13782
+[80,    10] loss / pixel: 10.05336
+[Epoch 80 complete] mean loss / pixel: 10.112, accuracy 94.704%, dt 2019-03-27 15:41:03.498674
+[81,     2] loss / pixel: 10.23612
+[81,     4] loss / pixel: 10.11184
+[81,     6] loss / pixel: 10.15297
+[81,     8] loss / pixel: 10.08908
+[81,    10] loss / pixel: 9.99922
+[Epoch 81 complete] mean loss / pixel: 10.111, accuracy 94.982%, dt 2019-03-27 15:41:34.719805
+[82,     2] loss / pixel: 10.12421
+[82,     4] loss / pixel: 9.84834
+[82,     6] loss / pixel: 10.18542
+[82,     8] loss / pixel: 9.91484
+[82,    10] loss / pixel: 10.44140
+[Epoch 82 complete] mean loss / pixel: 10.110, accuracy 94.633%, dt 2019-03-27 15:42:05.841829
+[83,     2] loss / pixel: 9.90275
+[83,     4] loss / pixel: 9.98344
+[83,     6] loss / pixel: 9.91299
+[83,     8] loss / pixel: 10.36432
+[83,    10] loss / pixel: 10.29868
+[Epoch 83 complete] mean loss / pixel: 10.106, accuracy 94.852%, dt 2019-03-27 15:42:36.681768
+[84,     2] loss / pixel: 10.09023
+[84,     4] loss / pixel: 9.79014
+[84,     6] loss / pixel: 10.31466
+[84,     8] loss / pixel: 10.21614
+[84,    10] loss / pixel: 10.29803
+[Epoch 84 complete] mean loss / pixel: 10.105, accuracy 95.158%, dt 2019-03-27 15:43:09.249042
+[85,     2] loss / pixel: 10.05555
+[85,     4] loss / pixel: 10.39333
+[85,     6] loss / pixel: 10.06679
+[85,     8] loss / pixel: 10.12412
+[85,    10] loss / pixel: 9.93267
+[Epoch 85 complete] mean loss / pixel: 10.098, accuracy 94.720%, dt 2019-03-27 15:43:40.371013
+[86,     2] loss / pixel: 10.11978
+[86,     4] loss / pixel: 10.07651
+[86,     6] loss / pixel: 10.36523
+[86,     8] loss / pixel: 10.13212
+[86,    10] loss / pixel: 9.78833
+[Epoch 86 complete] mean loss / pixel: 10.096, accuracy 95.383%, dt 2019-03-27 15:44:11.342704
+[87,     2] loss / pixel: 10.30910
+[87,     4] loss / pixel: 9.68230
+[87,     6] loss / pixel: 9.85736
+[87,     8] loss / pixel: 10.40143
+[87,    10] loss / pixel: 10.14624
+[Epoch 87 complete] mean loss / pixel: 10.094, accuracy 95.206%, dt 2019-03-27 15:44:42.862593
+[88,     2] loss / pixel: 10.13043
+[88,     4] loss / pixel: 10.06514
+[88,     6] loss / pixel: 10.36550
+[88,     8] loss / pixel: 10.13876
+[88,    10] loss / pixel: 9.97730
+[Epoch 88 complete] mean loss / pixel: 10.094, accuracy 94.952%, dt 2019-03-27 15:45:14.218687
+[89,     2] loss / pixel: 10.34005
+[89,     4] loss / pixel: 10.09593
+[89,     6] loss / pixel: 10.22423
+[89,     8] loss / pixel: 9.73844
+[89,    10] loss / pixel: 10.12147
+[Epoch 89 complete] mean loss / pixel: 10.089, accuracy 95.389%, dt 2019-03-27 15:45:46.050499
+[90,     2] loss / pixel: 9.80849
+[90,     4] loss / pixel: 10.16203
+[90,     6] loss / pixel: 10.07841
+[90,     8] loss / pixel: 10.15197
+[90,    10] loss / pixel: 10.31545
+[Epoch 90 complete] mean loss / pixel: 10.090, accuracy 95.032%, dt 2019-03-27 15:46:17.956489
+[91,     2] loss / pixel: 10.33437
+[91,     4] loss / pixel: 10.22833
+[91,     6] loss / pixel: 9.87419
+[91,     8] loss / pixel: 10.03182
+[91,    10] loss / pixel: 10.04056
+[Epoch 91 complete] mean loss / pixel: 10.086, accuracy 95.234%, dt 2019-03-27 15:46:49.007867
+[92,     2] loss / pixel: 10.44317
+[92,     4] loss / pixel: 10.03480
+[92,     6] loss / pixel: 10.20105
+[92,     8] loss / pixel: 10.02788
+[92,    10] loss / pixel: 9.98930
+[Epoch 92 complete] mean loss / pixel: 10.084, accuracy 95.429%, dt 2019-03-27 15:47:20.337633
+[93,     2] loss / pixel: 10.31048
+[93,     4] loss / pixel: 10.21106
+[93,     6] loss / pixel: 9.96812
+[93,     8] loss / pixel: 10.18129
+[93,    10] loss / pixel: 9.92169
+[Epoch 93 complete] mean loss / pixel: 10.083, accuracy 95.246%, dt 2019-03-27 15:47:51.945703
+[94,     2] loss / pixel: 10.06803
+[94,     4] loss / pixel: 10.10364
+[94,     6] loss / pixel: 10.16616
+[94,     8] loss / pixel: 9.93908
+[94,    10] loss / pixel: 10.16609
+[Epoch 94 complete] mean loss / pixel: 10.080, accuracy 94.985%, dt 2019-03-27 15:48:23.553238
+[95,     2] loss / pixel: 9.79796
+[95,     4] loss / pixel: 10.26256
+[95,     6] loss / pixel: 9.77257
+[95,     8] loss / pixel: 10.36900
+[95,    10] loss / pixel: 10.06161
+[Epoch 95 complete] mean loss / pixel: 10.076, accuracy 95.538%, dt 2019-03-27 15:48:54.331864
+[96,     2] loss / pixel: 10.36727
+[96,     4] loss / pixel: 9.80799
+[96,     6] loss / pixel: 9.87563
+[96,     8] loss / pixel: 10.08629
+[96,    10] loss / pixel: 10.14053
+[Epoch 96 complete] mean loss / pixel: 10.074, accuracy 95.687%, dt 2019-03-27 15:49:25.684115
+[97,     2] loss / pixel: 10.39621
+[97,     4] loss / pixel: 10.00528
+[97,     6] loss / pixel: 9.69909
+[97,     8] loss / pixel: 10.12145
+[97,    10] loss / pixel: 10.29996
+[Epoch 97 complete] mean loss / pixel: 10.073, accuracy 95.402%, dt 2019-03-27 15:49:57.136817
+[98,     2] loss / pixel: 10.16005
+[98,     4] loss / pixel: 9.71389
+[98,     6] loss / pixel: 10.17227
+[98,     8] loss / pixel: 10.06432
+[98,    10] loss / pixel: 10.43088
+[Epoch 98 complete] mean loss / pixel: 10.071, accuracy 95.308%, dt 2019-03-27 15:50:28.481647
+[99,     2] loss / pixel: 10.17790
+[99,     4] loss / pixel: 9.98279
+[99,     6] loss / pixel: 10.07661
+[99,     8] loss / pixel: 9.96303
+[99,    10] loss / pixel: 10.08295
+[Epoch 99 complete] mean loss / pixel: 10.069, accuracy 95.534%, dt 2019-03-27 15:50:58.844460
+[100,     2] loss / pixel: 10.26296
+[100,     4] loss / pixel: 10.02974
+[100,     6] loss / pixel: 9.98118
+[100,     8] loss / pixel: 10.30283
+[100,    10] loss / pixel: 9.94598
+[Epoch 100 complete] mean loss / pixel: 10.069, accuracy 95.166%, dt 2019-03-27 15:51:29.379535
+UPDATING LR 2.5e-06
+[101,     2] loss / pixel: 9.83346
+[101,     4] loss / pixel: 10.15582
+[101,     6] loss / pixel: 10.09943
+[101,     8] loss / pixel: 10.13027
+[101,    10] loss / pixel: 9.92783
+[Epoch 101 complete] mean loss / pixel: 10.062, accuracy 95.533%, dt 2019-03-27 15:52:00.932871
+[102,     2] loss / pixel: 10.04958
+[102,     4] loss / pixel: 10.03106
+[102,     6] loss / pixel: 9.87884
+[102,     8] loss / pixel: 10.20611
+[102,    10] loss / pixel: 10.00801
+[Epoch 102 complete] mean loss / pixel: 10.061, accuracy 95.599%, dt 2019-03-27 15:52:32.473674
+[103,     2] loss / pixel: 10.26877
+[103,     4] loss / pixel: 10.01071
+[103,     6] loss / pixel: 10.10732
+[103,     8] loss / pixel: 10.00776
+[103,    10] loss / pixel: 9.95074
+[Epoch 103 complete] mean loss / pixel: 10.061, accuracy 95.771%, dt 2019-03-27 15:53:03.978875
+[104,     2] loss / pixel: 10.11497
+[104,     4] loss / pixel: 9.92281
+[104,     6] loss / pixel: 10.14639
+[104,     8] loss / pixel: 10.20919
+[104,    10] loss / pixel: 9.94635
+[Epoch 104 complete] mean loss / pixel: 10.061, accuracy 95.478%, dt 2019-03-27 15:53:35.920162
+[105,     2] loss / pixel: 10.22000
+[105,     4] loss / pixel: 10.11969
+[105,     6] loss / pixel: 9.92948
+[105,     8] loss / pixel: 9.82409
+[105,    10] loss / pixel: 10.03766
+[Epoch 105 complete] mean loss / pixel: 10.059, accuracy 95.685%, dt 2019-03-27 15:54:07.423228
+[106,     2] loss / pixel: 9.76393
+[106,     4] loss / pixel: 9.92546
+[106,     6] loss / pixel: 9.98675
+[106,     8] loss / pixel: 10.11871
+[106,    10] loss / pixel: 10.25119
+[Epoch 106 complete] mean loss / pixel: 10.056, accuracy 95.804%, dt 2019-03-27 15:54:38.953942
+[107,     2] loss / pixel: 9.84531
+[107,     4] loss / pixel: 10.04318
+[107,     6] loss / pixel: 10.09847
+[107,     8] loss / pixel: 9.94245
+[107,    10] loss / pixel: 10.21736
+[Epoch 107 complete] mean loss / pixel: 10.056, accuracy 95.828%, dt 2019-03-27 15:55:10.585434
+[108,     2] loss / pixel: 10.08409
+[108,     4] loss / pixel: 9.91120
+[108,     6] loss / pixel: 9.92650
+[108,     8] loss / pixel: 9.94979
+[108,    10] loss / pixel: 10.41252
+[Epoch 108 complete] mean loss / pixel: 10.056, accuracy 95.587%, dt 2019-03-27 15:55:42.020552
+[109,     2] loss / pixel: 9.95970
+[109,     4] loss / pixel: 9.95041
+[109,     6] loss / pixel: 10.15905
+[109,     8] loss / pixel: 10.18708
+[109,    10] loss / pixel: 10.06281
+[Epoch 109 complete] mean loss / pixel: 10.053, accuracy 95.914%, dt 2019-03-27 15:56:14.449511
+[110,     2] loss / pixel: 10.00445
+[110,     4] loss / pixel: 10.07926
+[110,     6] loss / pixel: 10.02667
+[110,     8] loss / pixel: 10.07579
+[110,    10] loss / pixel: 10.23283
+[Epoch 110 complete] mean loss / pixel: 10.052, accuracy 95.774%, dt 2019-03-27 15:56:46.232324
+[111,     2] loss / pixel: 9.98118
+[111,     4] loss / pixel: 10.00819
+[111,     6] loss / pixel: 9.84730
+[111,     8] loss / pixel: 10.33447
+[111,    10] loss / pixel: 10.01875
+[Epoch 111 complete] mean loss / pixel: 10.053, accuracy 95.547%, dt 2019-03-27 15:57:17.641708
+[112,     2] loss / pixel: 9.99812
+[112,     4] loss / pixel: 10.39742
+[112,     6] loss / pixel: 10.02136
+[112,     8] loss / pixel: 10.18800
+[112,    10] loss / pixel: 9.78364
+[Epoch 112 complete] mean loss / pixel: 10.052, accuracy 95.658%, dt 2019-03-27 15:57:48.226643
+[113,     2] loss / pixel: 9.99905
+[113,     4] loss / pixel: 10.10574
+[113,     6] loss / pixel: 9.88357
+[113,     8] loss / pixel: 10.14289
+[113,    10] loss / pixel: 10.09874
+[Epoch 113 complete] mean loss / pixel: 10.051, accuracy 95.578%, dt 2019-03-27 15:58:19.308866
+[114,     2] loss / pixel: 9.80011
+[114,     4] loss / pixel: 10.28156
+[114,     6] loss / pixel: 9.91913
+[114,     8] loss / pixel: 10.06880
+[114,    10] loss / pixel: 10.18162
+[Epoch 114 complete] mean loss / pixel: 10.048, accuracy 95.794%, dt 2019-03-27 15:58:51.330766
+[115,     2] loss / pixel: 10.04725
+[115,     4] loss / pixel: 10.14319
+[115,     6] loss / pixel: 9.88672
+[115,     8] loss / pixel: 9.89883
+[115,    10] loss / pixel: 10.14379
+[Epoch 115 complete] mean loss / pixel: 10.049, accuracy 95.887%, dt 2019-03-27 15:59:22.889069
+[116,     2] loss / pixel: 10.31364
+[116,     4] loss / pixel: 9.97188
+[116,     6] loss / pixel: 10.08261
+[116,     8] loss / pixel: 10.37772
+[116,    10] loss / pixel: 9.71895
+[Epoch 116 complete] mean loss / pixel: 10.048, accuracy 95.636%, dt 2019-03-27 15:59:54.150008
+[117,     2] loss / pixel: 10.17777
+[117,     4] loss / pixel: 10.24172
+[117,     6] loss / pixel: 9.69468
+[117,     8] loss / pixel: 10.22503
+[117,    10] loss / pixel: 10.05238
+[Epoch 117 complete] mean loss / pixel: 10.048, accuracy 95.825%, dt 2019-03-27 16:00:25.625364
+[118,     2] loss / pixel: 10.21913
+[118,     4] loss / pixel: 9.95768
+[118,     6] loss / pixel: 10.18685
+[118,     8] loss / pixel: 9.94207
+[118,    10] loss / pixel: 9.88154
+[Epoch 118 complete] mean loss / pixel: 10.045, accuracy 95.972%, dt 2019-03-27 16:00:57.029021
+[119,     2] loss / pixel: 9.92777
+[119,     4] loss / pixel: 10.15112
+[119,     6] loss / pixel: 10.42316
+[119,     8] loss / pixel: 9.90976
+[119,    10] loss / pixel: 9.68915
+[Epoch 119 complete] mean loss / pixel: 10.043, accuracy 96.212%, dt 2019-03-27 16:01:28.888681
+[120,     2] loss / pixel: 10.35583
+[120,     4] loss / pixel: 9.89754
+[120,     6] loss / pixel: 10.02786
+[120,     8] loss / pixel: 9.85391
+[120,    10] loss / pixel: 10.03536
+[Epoch 120 complete] mean loss / pixel: 10.043, accuracy 95.957%, dt 2019-03-27 16:02:00.458427
+[121,     2] loss / pixel: 9.65567
+[121,     4] loss / pixel: 10.21246
+[121,     6] loss / pixel: 9.84128
+[121,     8] loss / pixel: 10.11342
+[121,    10] loss / pixel: 10.16417
+[Epoch 121 complete] mean loss / pixel: 10.042, accuracy 95.851%, dt 2019-03-27 16:02:32.779164
+[122,     2] loss / pixel: 9.82479
+[122,     4] loss / pixel: 9.81772
+[122,     6] loss / pixel: 10.17068
+[122,     8] loss / pixel: 10.08768
+[122,    10] loss / pixel: 10.34118
+[Epoch 122 complete] mean loss / pixel: 10.042, accuracy 96.062%, dt 2019-03-27 16:03:05.150266
+[123,     2] loss / pixel: 10.03656
+[123,     4] loss / pixel: 10.23961
+[123,     6] loss / pixel: 10.02246
+[123,     8] loss / pixel: 9.83075
+[123,    10] loss / pixel: 9.88954
+[Epoch 123 complete] mean loss / pixel: 10.042, accuracy 95.963%, dt 2019-03-27 16:03:36.300397
+[124,     2] loss / pixel: 10.16286
+[124,     4] loss / pixel: 10.17239
+[124,     6] loss / pixel: 9.95891
+[124,     8] loss / pixel: 10.21677
+[124,    10] loss / pixel: 9.91554
+[Epoch 124 complete] mean loss / pixel: 10.041, accuracy 95.959%, dt 2019-03-27 16:04:08.166715
+[125,     2] loss / pixel: 10.17375
+[125,     4] loss / pixel: 9.79315
+[125,     6] loss / pixel: 10.17460
+[125,     8] loss / pixel: 10.09563
+[125,    10] loss / pixel: 10.07769
+[Epoch 125 complete] mean loss / pixel: 10.037, accuracy 96.195%, dt 2019-03-27 16:04:39.492482
+[126,     2] loss / pixel: 10.34849
+[126,     4] loss / pixel: 9.81302
+[126,     6] loss / pixel: 10.08596
+[126,     8] loss / pixel: 9.86915
+[126,    10] loss / pixel: 9.95674
+[Epoch 126 complete] mean loss / pixel: 10.039, accuracy 95.789%, dt 2019-03-27 16:05:10.552633
+[127,     2] loss / pixel: 9.76885
+[127,     4] loss / pixel: 10.31813
+[127,     6] loss / pixel: 10.13365
+[127,     8] loss / pixel: 9.81800
+[127,    10] loss / pixel: 10.14557
+[Epoch 127 complete] mean loss / pixel: 10.036, accuracy 96.134%, dt 2019-03-27 16:05:41.578904
+[128,     2] loss / pixel: 10.09484
+[128,     4] loss / pixel: 10.03085
+[128,     6] loss / pixel: 10.12964
+[128,     8] loss / pixel: 10.03791
+[128,    10] loss / pixel: 9.77806
+[Epoch 128 complete] mean loss / pixel: 10.038, accuracy 95.986%, dt 2019-03-27 16:06:13.010816
+[129,     2] loss / pixel: 9.85569
+[129,     4] loss / pixel: 9.92432
+[129,     6] loss / pixel: 10.15090
+[129,     8] loss / pixel: 10.08350
+[129,    10] loss / pixel: 10.19886
+[Epoch 129 complete] mean loss / pixel: 10.035, accuracy 95.802%, dt 2019-03-27 16:06:44.259773
+[130,     2] loss / pixel: 9.78968
+[130,     4] loss / pixel: 10.13607
+[130,     6] loss / pixel: 10.00050
+[130,     8] loss / pixel: 10.09679
+[130,    10] loss / pixel: 10.15550
+[Epoch 130 complete] mean loss / pixel: 10.034, accuracy 96.166%, dt 2019-03-27 16:07:15.510157
+[131,     2] loss / pixel: 10.21544
+[131,     4] loss / pixel: 9.83281
+[131,     6] loss / pixel: 10.11519
+[131,     8] loss / pixel: 9.87868
+[131,    10] loss / pixel: 9.92884
+[Epoch 131 complete] mean loss / pixel: 10.030, accuracy 96.126%, dt 2019-03-27 16:07:46.751750
+[132,     2] loss / pixel: 9.95101
+[132,     4] loss / pixel: 10.02517
+[132,     6] loss / pixel: 9.79835
+[132,     8] loss / pixel: 10.21578
+[132,    10] loss / pixel: 9.96957
+[Epoch 132 complete] mean loss / pixel: 10.032, accuracy 96.209%, dt 2019-03-27 16:08:18.212408
+[133,     2] loss / pixel: 10.17952
+[133,     4] loss / pixel: 9.95816
+[133,     6] loss / pixel: 10.21737
+[133,     8] loss / pixel: 9.93867
+[133,    10] loss / pixel: 9.81860
+[Epoch 133 complete] mean loss / pixel: 10.034, accuracy 96.006%, dt 2019-03-27 16:08:49.440849
+[134,     2] loss / pixel: 9.90684
+[134,     4] loss / pixel: 10.19763
+[134,     6] loss / pixel: 10.18754
+[134,     8] loss / pixel: 10.04616
+[134,    10] loss / pixel: 9.96478
+[Epoch 134 complete] mean loss / pixel: 10.030, accuracy 95.957%, dt 2019-03-27 16:09:20.065153
+[135,     2] loss / pixel: 10.06612
+[135,     4] loss / pixel: 10.03268
+[135,     6] loss / pixel: 10.11046
+[135,     8] loss / pixel: 9.85448
+[135,    10] loss / pixel: 10.23995
+[Epoch 135 complete] mean loss / pixel: 10.030, accuracy 96.026%, dt 2019-03-27 16:09:51.289066
+[136,     2] loss / pixel: 10.04142
+[136,     4] loss / pixel: 10.01440
+[136,     6] loss / pixel: 9.89018
+[136,     8] loss / pixel: 10.26656
+[136,    10] loss / pixel: 10.06477
+[Epoch 136 complete] mean loss / pixel: 10.029, accuracy 96.048%, dt 2019-03-27 16:10:22.253936
+[137,     2] loss / pixel: 10.01638
+[137,     4] loss / pixel: 10.24429
+[137,     6] loss / pixel: 9.91752
+[137,     8] loss / pixel: 9.88113
+[137,    10] loss / pixel: 10.06129
+[Epoch 137 complete] mean loss / pixel: 10.026, accuracy 96.248%, dt 2019-03-27 16:10:53.199353
+[138,     2] loss / pixel: 10.11871
+[138,     4] loss / pixel: 10.24835
+[138,     6] loss / pixel: 10.11684
+[138,     8] loss / pixel: 9.84481
+[138,    10] loss / pixel: 10.28332
+[Epoch 138 complete] mean loss / pixel: 10.028, accuracy 96.018%, dt 2019-03-27 16:11:23.716785
+[139,     2] loss / pixel: 10.12023
+[139,     4] loss / pixel: 9.78240
+[139,     6] loss / pixel: 10.06463
+[139,     8] loss / pixel: 10.28692
+[139,    10] loss / pixel: 9.83518
+[Epoch 139 complete] mean loss / pixel: 10.024, accuracy 96.360%, dt 2019-03-27 16:11:54.808010
+[140,     2] loss / pixel: 9.56599
+[140,     4] loss / pixel: 9.87916
+[140,     6] loss / pixel: 10.23055
+[140,     8] loss / pixel: 10.23982
+[140,    10] loss / pixel: 10.12994
+[Epoch 140 complete] mean loss / pixel: 10.027, accuracy 95.963%, dt 2019-03-27 16:12:26.551506
+UPDATING LR 3.125e-07
+[141,     2] loss / pixel: 9.79829
+[141,     4] loss / pixel: 10.12321
+[141,     6] loss / pixel: 9.85593
+[141,     8] loss / pixel: 10.23256
+[141,    10] loss / pixel: 10.03781
+[Epoch 141 complete] mean loss / pixel: 10.021, accuracy 96.430%, dt 2019-03-27 16:12:58.570834
+[142,     2] loss / pixel: 10.03210
+[142,     4] loss / pixel: 9.67876
+[142,     6] loss / pixel: 10.14789
+[142,     8] loss / pixel: 10.15566
+[142,    10] loss / pixel: 10.13981
+[Epoch 142 complete] mean loss / pixel: 10.022, accuracy 96.327%, dt 2019-03-27 16:13:28.984367
+[143,     2] loss / pixel: 9.68082
+[143,     4] loss / pixel: 10.03688
+[143,     6] loss / pixel: 10.09952
+[143,     8] loss / pixel: 10.11372
+[143,    10] loss / pixel: 10.19605
+[Epoch 143 complete] mean loss / pixel: 10.023, accuracy 96.283%, dt 2019-03-27 16:14:00.416195
+[144,     2] loss / pixel: 9.69707
+[144,     4] loss / pixel: 10.03736
+[144,     6] loss / pixel: 10.29761
+[144,     8] loss / pixel: 10.07780
+[144,    10] loss / pixel: 10.02135
+[Epoch 144 complete] mean loss / pixel: 10.023, accuracy 96.106%, dt 2019-03-27 16:14:31.739162
+[145,     2] loss / pixel: 10.20194
+[145,     4] loss / pixel: 9.82855
+[145,     6] loss / pixel: 10.20078
+[145,     8] loss / pixel: 9.84713
+[145,    10] loss / pixel: 10.26244
+[Epoch 145 complete] mean loss / pixel: 10.022, accuracy 96.405%, dt 2019-03-27 16:15:03.400460
+[146,     2] loss / pixel: 10.15862
+[146,     4] loss / pixel: 10.13041
+[146,     6] loss / pixel: 10.14685
+[146,     8] loss / pixel: 9.67761
+[146,    10] loss / pixel: 9.99557
+[Epoch 146 complete] mean loss / pixel: 10.024, accuracy 96.219%, dt 2019-03-27 16:15:35.537358
+[147,     2] loss / pixel: 10.25088
+[147,     4] loss / pixel: 9.97865
+[147,     6] loss / pixel: 9.71561
+[147,     8] loss / pixel: 10.32539
+[147,    10] loss / pixel: 9.95440
+[Epoch 147 complete] mean loss / pixel: 10.025, accuracy 96.151%, dt 2019-03-27 16:16:07.065993
+[148,     2] loss / pixel: 10.06958
+[148,     4] loss / pixel: 10.27499
+[148,     6] loss / pixel: 9.79627
+[148,     8] loss / pixel: 9.91328
+[148,    10] loss / pixel: 10.04665
+[Epoch 148 complete] mean loss / pixel: 10.021, accuracy 96.491%, dt 2019-03-27 16:16:37.997904
+[149,     2] loss / pixel: 10.22673
+[149,     4] loss / pixel: 9.89747
+[149,     6] loss / pixel: 9.75381
+[149,     8] loss / pixel: 10.11005
+[149,    10] loss / pixel: 10.16774
+[Epoch 149 complete] mean loss / pixel: 10.021, accuracy 96.521%, dt 2019-03-27 16:17:09.206839
+[150,     2] loss / pixel: 10.03054
+[150,     4] loss / pixel: 10.12698
+[150,     6] loss / pixel: 10.34666
+[150,     8] loss / pixel: 9.91948
+[150,    10] loss / pixel: 9.76689
+[Epoch 150 complete] mean loss / pixel: 10.022, accuracy 96.120%, dt 2019-03-27 16:17:40.366756
+[151,     2] loss / pixel: 10.00090
+[151,     4] loss / pixel: 10.09788
+[151,     6] loss / pixel: 10.09351
+[151,     8] loss / pixel: 10.00261
+[151,    10] loss / pixel: 9.84226
+[Epoch 151 complete] mean loss / pixel: 10.021, accuracy 96.301%, dt 2019-03-27 16:18:11.519651
+[152,     2] loss / pixel: 9.98403
+[152,     4] loss / pixel: 9.72240
+[152,     6] loss / pixel: 10.00252
+[152,     8] loss / pixel: 10.16596
+[152,    10] loss / pixel: 10.20762
+[Epoch 152 complete] mean loss / pixel: 10.024, accuracy 96.156%, dt 2019-03-27 16:18:42.270410
+[153,     2] loss / pixel: 10.23201
+[153,     4] loss / pixel: 9.88544
+[153,     6] loss / pixel: 9.86421
+[153,     8] loss / pixel: 9.97397
+[153,    10] loss / pixel: 10.23305
+[Epoch 153 complete] mean loss / pixel: 10.022, accuracy 96.120%, dt 2019-03-27 16:19:13.697254
+[154,     2] loss / pixel: 10.12960
+[154,     4] loss / pixel: 10.22132
+[154,     6] loss / pixel: 10.09571
+[154,     8] loss / pixel: 9.71122
+[154,    10] loss / pixel: 10.14047
+[Epoch 154 complete] mean loss / pixel: 10.023, accuracy 95.990%, dt 2019-03-27 16:19:44.591871
+[155,     2] loss / pixel: 10.05445
+[155,     4] loss / pixel: 9.91137
+[155,     6] loss / pixel: 9.98219
+[155,     8] loss / pixel: 10.13924
+[155,    10] loss / pixel: 9.86194
+[Epoch 155 complete] mean loss / pixel: 10.021, accuracy 96.315%, dt 2019-03-27 16:20:17.210292
+[156,     2] loss / pixel: 10.11669
+[156,     4] loss / pixel: 9.96186
+[156,     6] loss / pixel: 9.97170
+[156,     8] loss / pixel: 9.98833
+[156,    10] loss / pixel: 10.10272
+[Epoch 156 complete] mean loss / pixel: 10.022, accuracy 96.190%, dt 2019-03-27 16:20:49.443778
+[157,     2] loss / pixel: 9.99386
+[157,     4] loss / pixel: 10.09813
+[157,     6] loss / pixel: 9.64425
+[157,     8] loss / pixel: 10.24966
+[157,    10] loss / pixel: 10.13372
+[Epoch 157 complete] mean loss / pixel: 10.022, accuracy 96.223%, dt 2019-03-27 16:21:21.434301
+[158,     2] loss / pixel: 10.26635
+[158,     4] loss / pixel: 10.12817
+[158,     6] loss / pixel: 9.95164
+[158,     8] loss / pixel: 9.81672
+[158,    10] loss / pixel: 10.11877
+[Epoch 158 complete] mean loss / pixel: 10.022, accuracy 96.190%, dt 2019-03-27 16:21:53.412958
+[159,     2] loss / pixel: 10.14912
+[159,     4] loss / pixel: 9.99227
+[159,     6] loss / pixel: 9.87550
+[159,     8] loss / pixel: 9.86042
+[159,    10] loss / pixel: 10.31710
+[Epoch 159 complete] mean loss / pixel: 10.021, accuracy 96.316%, dt 2019-03-27 16:22:25.610084
+[160,     2] loss / pixel: 9.99098
+[160,     4] loss / pixel: 9.79862
+[160,     6] loss / pixel: 10.05458
+[160,     8] loss / pixel: 10.03761
+[160,    10] loss / pixel: 10.12917
+[Epoch 160 complete] mean loss / pixel: 10.018, accuracy 96.291%, dt 2019-03-27 16:22:56.472057
+[161,     2] loss / pixel: 10.32779
+[161,     4] loss / pixel: 10.34457
+[161,     6] loss / pixel: 9.97199
+[161,     8] loss / pixel: 9.83244
+[161,    10] loss / pixel: 9.92808
+[Epoch 161 complete] mean loss / pixel: 10.022, accuracy 96.065%, dt 2019-03-27 16:23:27.649820
+[162,     2] loss / pixel: 9.96598
+[162,     4] loss / pixel: 10.06806
+[162,     6] loss / pixel: 10.07379
+[162,     8] loss / pixel: 10.04263
+[162,    10] loss / pixel: 10.13615
+[Epoch 162 complete] mean loss / pixel: 10.021, accuracy 96.215%, dt 2019-03-27 16:23:59.338605
+[163,     2] loss / pixel: 10.26830
+[163,     4] loss / pixel: 9.98158
+[163,     6] loss / pixel: 10.01087
+[163,     8] loss / pixel: 9.75377
+[163,    10] loss / pixel: 9.92500
+[Epoch 163 complete] mean loss / pixel: 10.020, accuracy 96.148%, dt 2019-03-27 16:24:31.233136
+[164,     2] loss / pixel: 9.82603
+[164,     4] loss / pixel: 10.17188
+[164,     6] loss / pixel: 9.94105
+[164,     8] loss / pixel: 10.14239
+[164,    10] loss / pixel: 9.91411
+[Epoch 164 complete] mean loss / pixel: 10.022, accuracy 96.258%, dt 2019-03-27 16:25:02.030264
+[165,     2] loss / pixel: 9.96478
+[165,     4] loss / pixel: 9.92602
+[165,     6] loss / pixel: 9.91259
+[165,     8] loss / pixel: 10.06749
+[165,    10] loss / pixel: 10.10871
+[Epoch 165 complete] mean loss / pixel: 10.020, accuracy 96.437%, dt 2019-03-27 16:25:33.113240
+[166,     2] loss / pixel: 9.82697
+[166,     4] loss / pixel: 10.22701
+[166,     6] loss / pixel: 9.92067
+[166,     8] loss / pixel: 9.84605
+[166,    10] loss / pixel: 10.31398
+[Epoch 166 complete] mean loss / pixel: 10.021, accuracy 96.072%, dt 2019-03-27 16:26:04.110912
+[167,     2] loss / pixel: 9.91636
+[167,     4] loss / pixel: 9.86674
+[167,     6] loss / pixel: 10.19112
+[167,     8] loss / pixel: 9.94350
+[167,    10] loss / pixel: 10.08327
+[Epoch 167 complete] mean loss / pixel: 10.020, accuracy 96.230%, dt 2019-03-27 16:26:34.966160
+[168,     2] loss / pixel: 9.75211
+[168,     4] loss / pixel: 10.36949
+[168,     6] loss / pixel: 9.94077
+[168,     8] loss / pixel: 10.00081
+[168,    10] loss / pixel: 9.97727
+[Epoch 168 complete] mean loss / pixel: 10.020, accuracy 96.406%, dt 2019-03-27 16:27:05.795002
+[169,     2] loss / pixel: 9.88600
+[169,     4] loss / pixel: 10.21134
+[169,     6] loss / pixel: 9.79082
+[169,     8] loss / pixel: 9.92399
+[169,    10] loss / pixel: 10.33044
+[Epoch 169 complete] mean loss / pixel: 10.020, accuracy 96.362%, dt 2019-03-27 16:27:36.820974
+[170,     2] loss / pixel: 10.12947
+[170,     4] loss / pixel: 10.06213
+[170,     6] loss / pixel: 9.82611
+[170,     8] loss / pixel: 10.09026
+[170,    10] loss / pixel: 9.82229
+[Epoch 170 complete] mean loss / pixel: 10.019, accuracy 96.158%, dt 2019-03-27 16:28:08.734117
+[171,     2] loss / pixel: 9.89122
+[171,     4] loss / pixel: 10.10296
+[171,     6] loss / pixel: 10.02414
+[171,     8] loss / pixel: 9.87830
+[171,    10] loss / pixel: 10.29619
+[Epoch 171 complete] mean loss / pixel: 10.023, accuracy 96.043%, dt 2019-03-27 16:28:40.030357
+[172,     2] loss / pixel: 10.23189
+[172,     4] loss / pixel: 9.93278
+[172,     6] loss / pixel: 9.93134
+[172,     8] loss / pixel: 10.24930
+[172,    10] loss / pixel: 9.75347
+[Epoch 172 complete] mean loss / pixel: 10.019, accuracy 96.165%, dt 2019-03-27 16:29:11.490883
+[173,     2] loss / pixel: 9.77581
+[173,     4] loss / pixel: 10.26174
+[173,     6] loss / pixel: 10.09506
+[173,     8] loss / pixel: 10.06829
+[173,    10] loss / pixel: 9.99410
+[Epoch 173 complete] mean loss / pixel: 10.021, accuracy 96.270%, dt 2019-03-27 16:29:43.918030
+[174,     2] loss / pixel: 10.17908
+[174,     4] loss / pixel: 9.81987
+[174,     6] loss / pixel: 10.25137
+[174,     8] loss / pixel: 10.10104
+[174,    10] loss / pixel: 9.79016
+[Epoch 174 complete] mean loss / pixel: 10.018, accuracy 96.558%, dt 2019-03-27 16:30:15.283739
+[175,     2] loss / pixel: 10.22345
+[175,     4] loss / pixel: 9.89470
+[175,     6] loss / pixel: 10.11289
+[175,     8] loss / pixel: 9.90630
+[175,    10] loss / pixel: 9.81575
+[Epoch 175 complete] mean loss / pixel: 10.020, accuracy 96.165%, dt 2019-03-27 16:30:46.493337
+[176,     2] loss / pixel: 10.15655
+[176,     4] loss / pixel: 10.18979
+[176,     6] loss / pixel: 10.03595
+[176,     8] loss / pixel: 9.83638
+[176,    10] loss / pixel: 9.93517
+[Epoch 176 complete] mean loss / pixel: 10.019, accuracy 96.177%, dt 2019-03-27 16:31:17.843132
+[177,     2] loss / pixel: 9.99000
+[177,     4] loss / pixel: 10.11601
+[177,     6] loss / pixel: 10.10607
+[177,     8] loss / pixel: 9.68455
+[177,    10] loss / pixel: 10.08701
+[Epoch 177 complete] mean loss / pixel: 10.020, accuracy 96.255%, dt 2019-03-27 16:31:49.283724
+[178,     2] loss / pixel: 9.98319
+[178,     4] loss / pixel: 10.20940
+[178,     6] loss / pixel: 10.08564
+[178,     8] loss / pixel: 9.59220
+[178,    10] loss / pixel: 10.12949
+[Epoch 178 complete] mean loss / pixel: 10.022, accuracy 96.020%, dt 2019-03-27 16:32:20.465857
+[179,     2] loss / pixel: 9.58884
+[179,     4] loss / pixel: 10.20633
+[179,     6] loss / pixel: 9.92475
+[179,     8] loss / pixel: 10.12188
+[179,    10] loss / pixel: 10.29860
+[Epoch 179 complete] mean loss / pixel: 10.018, accuracy 96.202%, dt 2019-03-27 16:32:52.727778
+[180,     2] loss / pixel: 10.11112
+[180,     4] loss / pixel: 9.77819
+[180,     6] loss / pixel: 10.19961
+[180,     8] loss / pixel: 10.28974
+[180,    10] loss / pixel: 10.08892
+[Epoch 180 complete] mean loss / pixel: 10.020, accuracy 96.355%, dt 2019-03-27 16:33:24.760919
+UPDATING LR 7.8125e-08
+[181,     2] loss / pixel: 10.30249
+[181,     4] loss / pixel: 10.07335
+[181,     6] loss / pixel: 9.72347
+[181,     8] loss / pixel: 9.88996
+[181,    10] loss / pixel: 10.07193
+[Epoch 181 complete] mean loss / pixel: 10.019, accuracy 96.392%, dt 2019-03-27 16:33:56.811864
+[182,     2] loss / pixel: 10.08531
+[182,     4] loss / pixel: 9.99949
+[182,     6] loss / pixel: 10.11824
+[182,     8] loss / pixel: 9.90239
+[182,    10] loss / pixel: 9.93550
+[Epoch 182 complete] mean loss / pixel: 10.020, accuracy 96.112%, dt 2019-03-27 16:34:29.292428
+[183,     2] loss / pixel: 9.88915
+[183,     4] loss / pixel: 9.99215
+[183,     6] loss / pixel: 10.11345
+[183,     8] loss / pixel: 9.73183
+[183,    10] loss / pixel: 10.37749
+[Epoch 183 complete] mean loss / pixel: 10.017, accuracy 96.358%, dt 2019-03-27 16:35:00.469394
+[184,     2] loss / pixel: 10.21377
+[184,     4] loss / pixel: 10.18725
+[184,     6] loss / pixel: 9.96337
+[184,     8] loss / pixel: 10.00933
+[184,    10] loss / pixel: 9.81560
+[Epoch 184 complete] mean loss / pixel: 10.017, accuracy 96.282%, dt 2019-03-27 16:35:32.284963
+[185,     2] loss / pixel: 9.79664
+[185,     4] loss / pixel: 10.17573
+[185,     6] loss / pixel: 10.14290
+[185,     8] loss / pixel: 9.96754
+[185,    10] loss / pixel: 10.15938
+[Epoch 185 complete] mean loss / pixel: 10.018, accuracy 96.471%, dt 2019-03-27 16:36:03.863583
+[186,     2] loss / pixel: 10.11289
+[186,     4] loss / pixel: 10.12693
+[186,     6] loss / pixel: 9.95170
+[186,     8] loss / pixel: 10.20998
+[186,    10] loss / pixel: 9.74821
+[Epoch 186 complete] mean loss / pixel: 10.021, accuracy 96.016%, dt 2019-03-27 16:36:34.123288
+[187,     2] loss / pixel: 10.06769
+[187,     4] loss / pixel: 10.38597
+[187,     6] loss / pixel: 9.87659
+[187,     8] loss / pixel: 10.02483
+[187,    10] loss / pixel: 9.92110
+[Epoch 187 complete] mean loss / pixel: 10.019, accuracy 96.136%, dt 2019-03-27 16:37:05.323667
+[188,     2] loss / pixel: 9.87976
+[188,     4] loss / pixel: 9.78758
+[188,     6] loss / pixel: 10.27538
+[188,     8] loss / pixel: 10.06521
+[188,    10] loss / pixel: 10.09335
+[Epoch 188 complete] mean loss / pixel: 10.017, accuracy 96.414%, dt 2019-03-27 16:37:36.265850
+[189,     2] loss / pixel: 9.81369
+[189,     4] loss / pixel: 9.70886
+[189,     6] loss / pixel: 10.24601
+[189,     8] loss / pixel: 10.21371
+[189,    10] loss / pixel: 10.08563
+[Epoch 189 complete] mean loss / pixel: 10.022, accuracy 96.194%, dt 2019-03-27 16:38:07.891222
+[190,     2] loss / pixel: 9.83103
+[190,     4] loss / pixel: 9.94173
+[190,     6] loss / pixel: 10.10574
+[190,     8] loss / pixel: 10.28362
+[190,    10] loss / pixel: 10.01990
+[Epoch 190 complete] mean loss / pixel: 10.017, accuracy 96.341%, dt 2019-03-27 16:38:39.741197
+UPDATING LR 3.90625e-08
+[191,     2] loss / pixel: 9.75599
+[191,     4] loss / pixel: 9.86264
+[191,     6] loss / pixel: 10.27223
+[191,     8] loss / pixel: 9.81640
+[191,    10] loss / pixel: 10.29125
+[Epoch 191 complete] mean loss / pixel: 10.020, accuracy 96.150%, dt 2019-03-27 16:39:11.005790
+[192,     2] loss / pixel: 10.40395
+[192,     4] loss / pixel: 9.91702
+[192,     6] loss / pixel: 9.99928
+[192,     8] loss / pixel: 9.78230
+[192,    10] loss / pixel: 10.04576
+[Epoch 192 complete] mean loss / pixel: 10.019, accuracy 96.057%, dt 2019-03-27 16:39:42.155519
+[193,     2] loss / pixel: 9.92288
+[193,     4] loss / pixel: 9.99150
+[193,     6] loss / pixel: 10.41172
+[193,     8] loss / pixel: 9.79911
+[193,    10] loss / pixel: 10.01175
+[Epoch 193 complete] mean loss / pixel: 10.016, accuracy 96.216%, dt 2019-03-27 16:40:13.294160
+[194,     2] loss / pixel: 9.88673
+[194,     4] loss / pixel: 10.21475
+[194,     6] loss / pixel: 9.73942
+[194,     8] loss / pixel: 10.06640
+[194,    10] loss / pixel: 10.11597
+[Epoch 194 complete] mean loss / pixel: 10.015, accuracy 96.358%, dt 2019-03-27 16:40:43.996569
+[195,     2] loss / pixel: 10.06908
+[195,     4] loss / pixel: 10.14503
+[195,     6] loss / pixel: 9.94827
+[195,     8] loss / pixel: 10.13309
+[195,    10] loss / pixel: 9.72791
+[Epoch 195 complete] mean loss / pixel: 10.020, accuracy 96.194%, dt 2019-03-27 16:41:15.335494
+[196,     2] loss / pixel: 10.10975
+[196,     4] loss / pixel: 10.13389
+[196,     6] loss / pixel: 9.93212
+[196,     8] loss / pixel: 10.02725
+[196,    10] loss / pixel: 9.93412
+[Epoch 196 complete] mean loss / pixel: 10.020, accuracy 96.266%, dt 2019-03-27 16:41:46.446690
+[197,     2] loss / pixel: 10.19025
+[197,     4] loss / pixel: 10.15398
+[197,     6] loss / pixel: 9.94416
+[197,     8] loss / pixel: 9.73021
+[197,    10] loss / pixel: 10.02496
+[Epoch 197 complete] mean loss / pixel: 10.017, accuracy 96.294%, dt 2019-03-27 16:42:17.266967
+[198,     2] loss / pixel: 9.96737
+[198,     4] loss / pixel: 10.02814
+[198,     6] loss / pixel: 9.97851
+[198,     8] loss / pixel: 10.00870
+[198,    10] loss / pixel: 10.10154
+[Epoch 198 complete] mean loss / pixel: 10.019, accuracy 96.320%, dt 2019-03-27 16:42:48.604682
+[199,     2] loss / pixel: 10.14134
+[199,     4] loss / pixel: 10.00688
+[199,     6] loss / pixel: 9.86656
+[199,     8] loss / pixel: 10.25537
+[199,    10] loss / pixel: 9.81200
+[Epoch 199 complete] mean loss / pixel: 10.017, accuracy 96.271%, dt 2019-03-27 16:43:19.590989
+[200,     2] loss / pixel: 10.16692
+[200,     4] loss / pixel: 9.59348
+[200,     6] loss / pixel: 10.10294
+[200,     8] loss / pixel: 10.12122
+[200,    10] loss / pixel: 10.12110
+[Epoch 200 complete] mean loss / pixel: 10.018, accuracy 96.407%, dt 2019-03-27 16:43:49.956401
+
+Training complete. Saving graphs
+Testing
+Image index tensor(0)
+
+*OVERALL REPORT*
+
+Trained on 3 test images.
+Acc: 91%, CentralAcc: 79% AvgConf: 0.695 FPos: 46130672  FNeg: 46144016 CorrUnlabel: 45561664
+
+
+*PER CLASS REPORT*
+
+class0 Acc: 74% Conf: 0.838 Corr: 1169650 FPos: 4191969 FNeg: 4447350 CorrUnLab: 4182707 on 1326490 predicted labels (1568527 actual).
+class1 Acc: 64% Conf: 0.254 Corr: 73610 FPos: 5652759 FNeg: 5662218 CorrUnLab: 5621419 on 104950 predicted labels (114409 actual).
+class2 Acc: 83% Conf: 2.281 Corr: 195636 FPos: 5531474 FNeg: 5519777 CorrUnLab: 5479719 on 247391 predicted labels (235694 actual).
+class3 Acc: 78% Conf: 1.988 Corr: 80429 FPos: 5664745 FNeg: 5587556 CorrUnLab: 5565562 on 179612 predicted labels (102423 actual).
+class4 Acc: 64% Conf: 1.463 Corr: 69219 FPos: 5659680 FNeg: 5526625 CorrUnLab: 5488356 on 240543 predicted labels (107488 actual).
+class5 Acc: 89% Conf: 2.671 Corr: 295897 FPos: 5435496 FNeg: 5372667 CorrUnLab: 5336892 on 394501 predicted labels (331672 actual).
+class6 Acc: 75% Conf: 1.546 Corr: 74436 FPos: 5667936 FNeg: 5671786 CorrUnLab: 5646990 on 95382 predicted labels (99232 actual).
+class7 Acc: 84% Conf: 1.213 Corr: 69977 FPos: 5683901 FNeg: 5654102 CorrUnLab: 5640812 on 113066 predicted labels (83267 actual).
+class8 Acc: 95% Conf: 0.085 Corr: 2970101 FPos: 2642712 FNeg: 2701935 CorrUnLab: 2599207 on 3065233 predicted labels (3124456 actual).
+
+*EQUAL WEIGHT REPORT*
+
+Accuracies (equal contribution) 78%
+Confidence (equal contribution) 1.371
+Training complete in 1.749 hrs
+No previous experiments found.
+
+Writing output to running results
+uniform_fixed_eps_lr0001_ep60_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep90_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep120_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep135_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep150_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep165_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep180_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep200_bs8/ not found (yet)
+uniform_fixed_eps_lr0001_ep220_bs8/ not found (yet)
+Completed run at 2019-03-27 16:44:13.509491
+Time for run 1.753 hrs
+
+Writing output to metaresults
+Successful completion
+Completed in 1.754 hours

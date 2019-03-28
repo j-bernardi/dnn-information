@@ -1,0 +1,2 @@
+Central, Accuracy, Smoothing_Type,   Time
+20.017, 55.361, data/LOCAL_experiment_1/uniform_vary_eps_lr02_ep1_bs1_0/, 0.007

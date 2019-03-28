@@ -36,6 +36,8 @@ def remake_graph(experiment_folder="data/initialising_loss/"):
     make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
     make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
 
+    plot_both(eps, accuracies, central_accuracies, experiment_folder)
+
 def define_experiment(test_small_slurm=False):
 
     # Too computationally expensive to go higher
@@ -58,11 +60,18 @@ def define_experiment(test_small_slurm=False):
                (0.0001, 8, 90),
                (0.0001, 8, 120),
                (0.0001, 8, 180),
-               (0.0001, 8, 220)]
+               (0.0001, 8, 220),
+               (0.0001, 8, 150),
+               (0.0001, 8, 135),
+               (0.0001, 8, 165),
+               (0.0001, 8, 200)]
+
+    test_low_lr = [(0.00002, 8, 200),
+                   (0.00005, 8, 180)]
 
     # DEFINE
     cln_types = ["loss"]#, "no_clean"]
-    lr_bs_eps = [test_8s[4]]
+    lr_bs_eps = [test_low_lr[1]]
     #lr_bs_eps = lr_4_eps + lr_6_eps
     #lr_bs_eps = lr_2_eps + lr_4_eps
 
@@ -150,7 +159,7 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
     acc, central_acc = ts.test(unet, testloader, params, out_shape, classes, 
                                experiment_folder=fn, save_graph=True)
 
-    return fn, acc, central_acc
+    return fn, acc, central_acc, accuracy_mean_val[-1], central_accuracy_mean_val[-1]
 
 def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,14)):
     """Makes an ordered plot of y on x."""
@@ -178,6 +187,51 @@ def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,14)):
     plt.savefig(experiment_folder + acc_type+ "_accuracy_on_" + title.lower().replace(" ", "_") + ".png")
     plt.close()
 
+def plot_both(epochs, y1, y2, experiment_folder, xlim=(40,240)):
+
+    ordered_y1 = [i for _, i in sorted(zip(epochs, y1))]
+    ordered_y2 = [i for _, i in sorted(zip(epochs, y2))]
+
+    y3, y4 = [], []
+    these_epochs = []
+
+    for e in [60,90,120,135,150,165,180,200,220]:
+        
+        fn = "uniform_fixed_eps_lr0001_ep"+ str(e) + "_bs8/"
+        
+        try:
+            y3.append(np.load(experiment_folder + fn + "epoch_accuracy.pkl")[-1])
+            y4.append(np.load(experiment_folder + fn + "epoch_central_accuracy.pkl")[-1])
+            these_epochs.append(e)
+        except:
+            print(experiment_folder + fn, "not found (yet)")
+
+    ordered_y3 = [i for _, i in sorted(zip(these_epochs, y3))]
+    ordered_y4 = [i for _, i in sorted(zip(these_epochs, y4))]
+    ordered_x = sorted(epochs)
+    ordered_x2 = sorted(these_epochs)
+
+    # PLOT BS
+    plt.figure()
+    
+    plt.plot(ordered_x, ordered_y1, 'bx-')
+    plt.plot(ordered_x2, ordered_y3, 'b+--')
+    plt.plot(ordered_x, ordered_y2, 'rx-')
+    plt.plot(ordered_x2, ordered_y4, 'r+--')
+    plt.legend(["Total accuracy", "Total training accuracy", 
+                "Central accuracy", "Central training accuracy"], 
+                loc='center right')
+
+    plt.title("Accuracies on epochs - lr=1e-4, bs=8")
+    
+    plt.xlim(xlim)
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy %")
+    
+    plt.savefig(experiment_folder +"compare_accuracy_epochs.png")
+    
+    plt.close()
+
 def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
 
     plt.figure()
@@ -200,10 +254,10 @@ if __name__ == "__main__":
 
     """
     remake_graph(experiment_folder="data/initialising_loss/")
-    remake_graph(experiment_folder="data/initialising_no_clean/")
+    #remake_graph(experiment_folder="data/initialising_no_clean/")
     sys.exit()
     """
-
+    
     # Track time for whole script
     TIME_TOTAL = time.time()
 
@@ -276,7 +330,7 @@ if __name__ == "__main__":
             # Run the experiment
             t_start = time.time()
             
-            filename, test_accuracy, central_acc =\
+            filename, test_accuracy, central_acc, train_accuracy, central_train_accuracy =\
                 run_experiment(unet, params, trainloader, testloader, classes, 
                                experiment_folder, number_samples=number_samples)
 
@@ -317,11 +371,14 @@ if __name__ == "__main__":
             make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
             make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
             
+            make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 240))
+            make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 240))
+
             try:
-                make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 240))
-                make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 240))
+                plot_both(eps, accuracies, central_accuracies, experiment_folder)
             except:
-                print("UNTESTED failure.")
+                print("UNTESTED epochs failure.")
+
 
             # PLOT PARAMETER SEARCH GRID
             make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)

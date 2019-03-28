@@ -1,4 +1,4 @@
-import torch, os
+import torch, os, sys #TEMP
 import torch.nn.functional as F
 import numpy as np
 
@@ -69,7 +69,7 @@ def construct_file(params, direct, ignore=True, append=""):
 
     return direct + file_name
 
-def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps", smoothing=0, clean="loss"):
+def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_eps", smoothing=0, clean="loss", prnt=False):
     """
     Calc CEL and apply various label smoothings.
     Based on uniform label smoothing here:
@@ -106,7 +106,7 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
     gold = gold.long()
 
     # If one hot encoding
-    if one_hot:
+    if one_hot_flag:
 
         ## INITIALISE ##
         n_batch = pred.size(0)
@@ -132,23 +132,25 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
             old_one_hot = one_hot.clone()
 
             old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
-            new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
             
             # Fix one hot
             one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
 
-            ## TEST ##
+            # Check still the same label, with some smoothing
+            new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
 
             # Assert that structure has been maintained!
             assert (old_max_indices == new_max_indices).all()
+            assert (one_hot != 0.).all()
             
             # Do some view-testing (despite asserting structure is maintained)
-            """
-            for j in np.arange(150, 350, 25):
-                print("argmax (256,", j, ")", old_max_indices[0,256,j])
-                print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
-                print("one_hot (256,", j, ")", one_hot[0,:,256,j])
-            """
+            if prnt:
+                print("APPLIED uniform fixed epsilon.")
+                for j in np.arange(150, 350, 25):
+                    print("argmax (256,", j, ")", old_max_indices[0,256,j])
+                    print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
+                    print("one_hot (256,", j, ")", one_hot[0,:,256,j])
+            
             del old_one_hot, old_max_indices, new_max_indices
 
         elif smoothing_type in ["weighted_vary_eps", "uniform_vary_eps", "weighted_fixed_eps"]:
@@ -162,8 +164,8 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
             # Tensor indicating smoothing of class[1] into class[2] (batch[0])
             smooth_tens = np.zeros((n_batch, n_class, n_class))
 
-            # Set self-adjacency magnitudes if eps will be varied
-            if smoothing_type == "weighted_vary_eps" or "uniform_vary_eps":
+            # Set self-adjacency magnitudes if *eps will be varied*
+            if smoothing_type in ["weighted_vary_eps", "uniform_vary_eps"]:
 
                 for c in range(adj_matrix.shape[1]):
 
@@ -173,7 +175,19 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
                         sum_others = (adj_matrix[:, c, :c].sum() + adj_matrix[:, c, (c+1):].sum())
 
                     # Update eps weights. Shape: batch, class
-                    eps[:, c] += (sum_others / adj_matrix[:, c, c])[0]
+                    ## TEMP FIX ## QUESTION - does this work for weighted, too?
+                    new_eps = (sum_others / adj_matrix[:, c, c])[0]
+                    if new_eps + smoothing > 1. - (1./(n_class-2)):
+
+                        # Limit the max new eps - keep it hot
+                        eps[:,c] += -smoothing + 1. - (1./(n_class-2))
+                    else:
+
+                        # add pm the new eps
+                        eps[:, c] += new_eps 
+
+                if prnt:
+                    print("Epsilon varied, e.g.:\n", eps[0,:])
             
             # Now build the up the smoothing tensor and do weighting if required
             for i in range(smooth_tens.shape[1]):
@@ -183,7 +197,8 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
                 
                 # Set the non-self smoothing magnitudes
                 if smoothing_type == "uniform_vary_eps":
-                    # Get the row that isn't the c-c error - uniform in this case
+
+                    # push repaining epsilon equally into other classes
                     rest = np.zeros((n_batch, n_class - 1)) + eps[:, i] / (n_class - 1)
 
                 elif smoothing_type == "weighted_vary_eps" or smoothing_type == "weighted_fixed_eps":
@@ -202,10 +217,17 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
 
                 assert len(rest.shape) == 2
 
+                if prnt:
+                    print("Smoothing varied eps into all classes\n", rest[0,:])
+
                 # Put the rest back in to the smoothing tensor
                 smooth_tens[:, i, :i] = rest[:, :i]
                 if i + 1 < smooth_tens.shape[1]:
                     smooth_tens[:, i, (i+1):] = rest[:, i:]
+
+            if prnt:
+                print("Reconstructed smoothing tensor\n", smooth_tens[0,:])
+
 
             # Check the smooth matrix for (approx) normalisation
             # COULD normalise but it doesn't work very consistently
@@ -223,24 +245,54 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
 
             # for testing
             old_one_hot = one_hot.clone()
-
-            # Use the smoothing matrix and gold
-            for c in range(one_hot.shape[1]):
-                one_hot[:,c,:,:] = torch.from_numpy(
-                    smooth_tens[:,gold[:,:,:].cpu().numpy(), c]).to(
-                        params["device"]).float()
-
             old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
+
+            ########### CHANGING AROUND ##############
+            # Use the smoothing matrix and gold
+            # TODO - check sampling from batches correctly
+            for b in range(n_batch):
+
+                # (9,9) matrix of class:smoothing
+                this_image_smooth = smooth_tens[b, :, :]
+
+                # the one hot tensor per cell (9, 512, 512) is this_image_smooth(class, :), flipped
+                np_tens = np.moveaxis(this_image_smooth[gold[b,:,:].cpu().numpy(), :], 2, 0)
+                
+                #print(np_tens[:, 256, 256])
+
+                one_hot[b, :, :, :] = torch.from_numpy(np_tens).to(gold.device).float()
+
+            assert one_hot.shape == old_one_hot.shape
+
+            """
+            # Works for batch size 1 ut casts np tens to (8,8,512,512)
+            for c in range(one_hot.shape[1]):
+                
+                print("gold shape", gold.shape)
+                print("one hot [c] shape", one_hot[:,c,:,:].shape)
+                
+                np_tens = smooth_tens[:, gold[:,:,:].cpu().numpy(), c]
+
+                print("np tens", np_tens.shape)
+                
+                one_hot[:,c,:,:] = torch.from_numpy(np_tens).to(gold.device).float()
+            """
+            ########################################
+
             new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
 
             # Do some view-testing (before asserting structure is maintained)
-            """
-            for j in np.arange(150, 350, 25):
-                print("argmax (256,", j, ")", old_max_indices[0,256,j])
-                print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
-                print("one_hot (256,", j, ")", one_hot[0,:,256,j])
-            """
+            if prnt:
+                print("Testing old and new one hots")
+
+                for j in np.arange(150, 350, 25):
+                    print("argmax (256,", j, ")", old_max_indices[0,256,j])
+                    print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
+                    print("one_hot (256,", j, ")", one_hot[0,:,256,j])
+                
             # Assert that structure has been maintained!
+            assert old_max_indices.shape == new_max_indices.shape
+            assert (old_max_indices[0] == new_max_indices[0]).all()
             assert (old_max_indices == new_max_indices).all()
 
             # no longer needed
@@ -251,6 +303,9 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
             assert (one_hot.sum(dim=1, keepdim=True) > 0.9999).all()
 
         elif smoothing_type == "none":
+            if prnt:
+                print("No smoothing applied. One hot:")
+                print(one_hot[0,:,0,0])
             pass
         
         else:
@@ -264,21 +319,31 @@ def calc_loss(inp, pred, gold, one_hot=True, smoothing_type="uniform_fixed_eps",
 
         # Either log prob is 0 (e.g. log of 1) or one_hot is 0s
         # E.g. to symbolise classification was exactly right
+        if prnt:
+            try:
+                print("Using one hot\n", one_hot[0,:,0,0])
+            except:
+                print("Failed indexing - untested")
+
         loss = -(one_hot * log_prb).sum(dim=1)
 
         # SET loss to 0 everywhere that input is 1. and gold is class 0
         # EG this is where the input was broken
         if clean == "loss":
+            
+            if prnt:
+                print("ENTERING loss cleaning.")
+
             loss = torch.where(((gold == 0) & (inp == 1.)) | ((gold == 8) & (inp == 1.)), 
                                torch.tensor(0., device=gold.device, dtype=torch.float), 
                                loss)
 
-        # LOSS - should this be per pixel, e.g. same shape as output?
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
-    
-    # loss from pred and gold, not one-hot
+        # LOSS
+        loss = loss.masked_select(non_pad_mask).sum()
+
     else:
 
+        # loss from pred and gold, NOT one-hot
         loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')
 
     return loss

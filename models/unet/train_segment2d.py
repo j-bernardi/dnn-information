@@ -183,10 +183,11 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
 
             # Calc loss
             loss = tm.calc_loss(inputs, outputs, labels, 
-                                one_hot=params["one_hot"], 
+                                one_hot_flag=params["one_hot"], 
                                 smoothing_type=params["smoothing_type"], 
                                 smoothing=params["label_smoothing"],
-                                clean=params["clean"])
+                                clean=params["clean"], 
+                                prnt=frst)
 
             # Get a tensor of the predicted classes
             pred_classes = torch.argmax(outputs.data, dim=1, keepdim=True)
@@ -213,11 +214,10 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
             central_cells_seen -= (shaped_labels == 0).sum().item()
             central_cells_seen -= (shaped_labels == 8).sum().item()
         
-            # Remove the cells that are white and of class 0 or 8
+            # Remove (white and of class 0 or 8) from reporting metrics
             if params["clean"] == "loss":
                 if frst:
                     print("Cleaning by ignoring loss")
-                    frst=False
                 
                 # Class 0 - remove white from correct count
                 class0_remove = ((inputs == 1.) & (shaped_labels == 0))#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
@@ -288,6 +288,9 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
                 running_loss = 0.0
                 running_number_images = 0
                 running_cells_seen = 0
+
+            # Not the first iteration anymore
+            frst=False
 
         ## EPOCH COMPLETE ##
 
