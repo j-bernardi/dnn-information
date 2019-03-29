@@ -125,6 +125,9 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
         ## APPLY VARIOUS SMOOTHING TYPES to one_hot ##
         if smoothing_type == "uniform_fixed_eps":
 
+            if prnt:
+                print("Smoothing by uniform fixed eps")
+
             # Apply uniform smoothing only
             eps = smoothing
 
@@ -162,77 +165,125 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
             eps = np.zeros((n_batch, n_class)) + smoothing
             
             # Tensor indicating smoothing of class[1] into class[2] (batch[0])
-            smooth_tens = np.zeros((n_batch, n_class, n_class))
+            smooth_tens = np.zeros((n_batch, n_class, n_class)).astype(float)
 
-            # Set self-adjacency magnitudes if *eps will be varied*
+            ## VARY EPS magnitude, if required ##
             if smoothing_type in ["weighted_vary_eps", "uniform_vary_eps"]:
+
+                if prnt:
+                    print("Smoothing by varying eps")
 
                 for c in range(adj_matrix.shape[1]):
 
-                    if c == adj_matrix.shape[1] - 1:
-                        sum_others = adj_matrix[:, c, :c].sum()
-                    else:
-                        sum_others = (adj_matrix[:, c, :c].sum() + adj_matrix[:, c, (c+1):].sum())
-
-                    # Update eps weights. Shape: batch, class
-                    ## TEMP FIX ## QUESTION - does this work for weighted, too?
-                    new_eps = (sum_others / adj_matrix[:, c, c])[0]
-                    if new_eps + smoothing > 1. - (1./(n_class-2)):
-
-                        # Limit the max new eps - keep it hot
-                        eps[:,c] += -smoothing + 1. - (1./(n_class-2))
+                    # if looking at the last class, just sum up to the end
+                    if c + 1 == adj_matrix.shape[1]:
+                    
+                        assert len(adj_matrix[:, c, :c].shape) == 2 # batch and sum
+                        sum_others = adj_matrix[:, c, :c].sum(axis=(1))
+                    
                     else:
 
-                        # add pm the new eps
-                        eps[:, c] += new_eps 
+                        # Get the first and last bits
+                        first_bit = adj_matrix[:, c, :c]
+                        end_bit = adj_matrix[:, c, (c+1):]
+                        
+                        # End bit
+                        if len(end_bit.shape) == 2:
+                            sum_others = adj_matrix[:, c, (c+1):].sum(axis=(1))
+                        elif len(end_bit.shape) == 1:
+                            sum_others = adj_matrix[:, c, (c+1):]
 
-                if prnt:
-                    print("Epsilon varied, e.g.:\n", eps[0,:])
+                        # First bit
+                        if len(first_bit.shape) == 2:
+                            sum_others += first_bit.sum(axis=(1))
+                        elif len(first_bit.shape) == 1:
+                            sum_others += first_bit
+
+                    ## Update eps weights. Shape: batch, class ##
+
+                    assert sum_others.shape == adj_matrix[:, c, c].shape
+                    
+                    # Batch-wise division
+                    new_eps = np.divide(sum_others, adj_matrix[:, c, c], dtype=np.dtype('float64'))
+                    
+                    # add pm the new eps in proportion to adjacency
+                    assert eps[:,c].shape == new_eps.shape
+                    eps[:, c] += new_eps 
+                    
+            if prnt:
+                print("Resulting Epsilon:\n", eps)
             
-            # Now build the up the smoothing tensor and do weighting if required
-            for i in range(smooth_tens.shape[1]):
+            ## WEIGHT THE SMOOTHING - based off eps size ##
+            for i in range(n_class):
                 
-                # Set the inter-class smoothing values
+                # Set the class-class smoothing values
                 smooth_tens[:, i, i] = 1. - eps[:, i]
                 
                 # Set the non-self smoothing magnitudes
                 if smoothing_type == "uniform_vary_eps":
+                    
+                    if prnt:
+                        print("Smoothing by uniform vary eps")
+
+                    rest = np.zeros((n_batch, n_class - 1))
 
                     # push repaining epsilon equally into other classes
-                    rest = np.zeros((n_batch, n_class - 1)) + eps[:, i] / (n_class - 1)
+                    for b in range(n_batch):
+                        
+                        rest[b] += eps[b, i] / (n_class - 1)
 
-                elif smoothing_type == "weighted_vary_eps" or smoothing_type == "weighted_fixed_eps":
+                        # Margins for error
+                        assert rest[b].sum() > eps[b, i] - 0.0001
+                        assert rest[b].sum() < eps[b, i] + 0.0001
+
+                        # Put the rest back in to the smoothing tensor
+                        smooth_tens[b, i, :i] = rest[b, :i]
+                        
+                        if i + 1 < smooth_tens.shape[1]:
+                            smooth_tens[b, i, (i+1):] = rest[b, i:]
+
+                elif smoothing_type in ["weighted_vary_eps", "weighted_fixed_eps"]:
+
+                    if prnt:
+                        print("Weighted smoothing")
+                    
                     # Do the weighting on the non-self-adjacency if weighted
-
                     if i == smooth_tens.shape[1] - 1:
                         rest = adj_matrix[:,i,:i]
                     else:
-                        rest = np.concatenate((adj_matrix[:, i, :i], adj_matrix[:, i, (i+1):]), axis=1)
+                        rest = np.concatenate((adj_matrix[:, i, :i], adj_matrix[:, i, (i+1):]), axis=(-1))
                     
-                    for b in range(rest.shape[0]):
+                    assert len(rest.shape) == 2
+
+                    # Per batch
+                    for b in range(n_batch):
+                        
+                        # normalise rest to size of error
                         rest[b] = eps[b, i] * (rest[b] / rest[b].sum())
-                        assert (rest[b].sum() - eps[b, i]) + 1. > 0.999
-                        assert (rest[b].sum() - eps[b, i]) + 1. < 1.001
-                        assert (rest[b].sum() - eps[b, i]) + 1. == 1.
+                        
+                        # Margins for error
+                        assert rest[b].sum() > eps[b, i] - 0.0001
+                        assert rest[b].sum() < eps[b, i] + 0.0001
+                        # assert (rest[b].sum() - eps[b, i]) + 1. == 1. # too fine?
 
-                assert len(rest.shape) == 2
+                        # Put the rest back in to the smoothing tensor
+                        smooth_tens[b, i, :i] = rest[b, :i]
+                        
+                        if i + 1 < smooth_tens.shape[1]:
+                            smooth_tens[b, i, (i+1):] = rest[b, i:]
 
-                if prnt:
-                    print("Smoothing varied eps into all classes\n", rest[0,:])
-
-                # Put the rest back in to the smoothing tensor
-                smooth_tens[:, i, :i] = rest[:, :i]
-                if i + 1 < smooth_tens.shape[1]:
-                    smooth_tens[:, i, (i+1):] = rest[:, i:]
+                #if prnt:
+                #    print("Smoothing was varied eps into all (other) classes for class", i, "\n", rest)
 
             if prnt:
-                print("Reconstructed smoothing tensor\n", smooth_tens[0,:])
+                for b in range(n_batch):
+                    print("Reconstructed smoothing tensors batch", b, "\n", smooth_tens[b])
 
 
             # Check the smooth matrix for (approx) normalisation
             # COULD normalise but it doesn't work very consistently
-            assert (smooth_tens.sum(axis=2, keepdims=True) < 1.0001).all()
-            assert (smooth_tens.sum(axis=2, keepdims=True) > 0.999).all()
+            assert (smooth_tens.sum(axis=(-1)) < 1.0001).all()
+            assert (smooth_tens.sum(axis=(-1)) > 0.9999).all()
 
             ## BUILD THE ONE-HOT LABEL UP ##
 
@@ -310,21 +361,22 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
         
         else:
             # If none of the 4 smoothing regimes
-            raise NotImplementedError
+            raise NotImplementedError("Smoothing type" + smoothing_type + "not implemented")
 
-        ## CALC LOSS ##
+        ## NOW CALC LOSS ##
+        
         log_prb = F.log_softmax(pred, dim=1)
 
         non_pad_mask = gold.ne(0)
 
-        # Either log prob is 0 (e.g. log of 1) or one_hot is 0s
-        # E.g. to symbolise classification was exactly right
         if prnt:
             try:
                 print("Using one hot\n", one_hot[0,:,0,0])
             except:
                 print("Failed indexing - untested")
 
+        # Either log prob is 0 (e.g. log of 1) or one_hot is 0s
+        # E.g. to symbolise classification was exactly right
         loss = -(one_hot * log_prb).sum(dim=1)
 
         # SET loss to 0 everywhere that input is 1. and gold is class 0

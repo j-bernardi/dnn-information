@@ -34,7 +34,7 @@
 #SBATCH --gres=gpu:4
 #!##################
 #!##################
-#SBATCH --time=0:30:00
+#SBATCH --time=00:07:00
 #!##################
 
 # send mail to this address
