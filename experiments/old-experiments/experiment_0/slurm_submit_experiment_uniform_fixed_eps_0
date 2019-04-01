@@ -34,7 +34,7 @@
 #SBATCH --gres=gpu:4
 #!##################
 #!##################
-#SBATCH --time=08:00:00
+#SBATCH --time=04:30:00
 #!##################
 
 # send mail to this address
@@ -79,7 +79,7 @@ source ~/rds/python_venv2/bin/activate
 #! Full path to application executable: 
 
 #!#####################################
-application="python /home/jhb57/dnn-information/experiments/run_experiment.py"
+application="python /home/jhb57/dnn-information/experiments/experiment_0/run_experiment_uniform_fixed_eps_0.py"
 #!#####################################
 
 #! Run options for the application:

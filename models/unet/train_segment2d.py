@@ -209,21 +209,21 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
                                         torch.tensor(0, device=inputs.device, dtype=torch.uint8),
                                         central_cells_correct)
 
-            # Remove central cells
-            central_cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)
-            central_cells_seen -= (shaped_labels == 0).sum().item()
-            central_cells_seen -= (shaped_labels == 8).sum().item()
+            # Remove non-central cells
+            central_cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)\
+                                - (shaped_labels == 0).sum().item()\
+                                - (shaped_labels == 8).sum().item()
         
             # Remove (white and of class 0 or 8) from reporting metrics
             if params["clean"] == "loss":
                 if frst:
-                    print("Cleaning by ignoring loss")
+                    print("Removing ignored loss cells from the accuracy calculations")
                 
                 # Class 0 - remove white from correct count
                 class0_remove = ((inputs == 1.) & (shaped_labels == 0))#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
                 
                 # Class 8 - remove white from correct count
-                class8_remove = (inputs == 1.) & (shaped_labels == 8)#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
+                class8_remove = ((inputs == 1.) & (shaped_labels == 8))#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
 
                 # Remove from correct counts
                 cells_correct = torch.where(class0_remove == 1, 
@@ -448,6 +448,10 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
 
             # Get outputs 
             outputs = unet(inputs)
+
+            ## NEW LINE ##
+            #assert (outputs.sum(dim=1) > 0.999).all()
+            #assert (outputs.sum(dim=1) < 1.001).all()
 
             ## CALCULATE CONFIDENCES and LABELS ## 
             max_conf_matrix, predicted = torch.max(outputs, 1, keepdim=True)
