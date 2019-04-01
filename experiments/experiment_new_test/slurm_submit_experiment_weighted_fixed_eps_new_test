@@ -79,7 +79,7 @@ source ~/rds/python_venv2/bin/activate
 #! Full path to application executable: 
 
 #!#####################################
-application="python /home/jhb57/dnn-information/experiments/run_experiment.py"
+application="python /home/jhb57/dnn-information/experiments/experiment_new_test/run_experiment_weighted_fixed_eps_new_test.py"
 #!#####################################
 
 #! Run options for the application:

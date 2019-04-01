@@ -119,10 +119,15 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
             raise NotImplementedError("Only implemented for batch x X x Y (3D)\nGot %s." %\
                 (len(gold.shape)))
         
-        ## MAKE LABEL ONE HOT ##
+        ## MAKE LABEL ONE HOT - plain and simple##
         one_hot = make_one_hot(reshaped_gold, reshaped_gold.device, n_class)
 
+        # for testing at the end - check structure is maintained
+        old_one_hot = one_hot.clone()
+        old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
+
         ## APPLY VARIOUS SMOOTHING TYPES to one_hot ##
+
         if smoothing_type == "uniform_fixed_eps":
 
             if prnt:
@@ -131,30 +136,10 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
             # Apply uniform smoothing only
             eps = smoothing
 
-            # For testing
-            old_one_hot = one_hot.clone()
-
-            old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
-            
             # Fix one hot
             one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
 
-            # Check still the same label, with some smoothing
-            new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
-
-            # Assert that structure has been maintained!
-            assert (old_max_indices == new_max_indices).all()
             assert (one_hot != 0.).all()
-            
-            # Do some view-testing (despite asserting structure is maintained)
-            if prnt:
-                print("APPLIED uniform fixed epsilon.")
-                for j in np.arange(150, 350, 25):
-                    print("argmax (256,", j, ")", old_max_indices[0,256,j])
-                    print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
-                    print("one_hot (256,", j, ")", one_hot[0,:,256,j])
-            
-            del old_one_hot, old_max_indices, new_max_indices
 
         elif smoothing_type in ["weighted_vary_eps", "uniform_vary_eps", "weighted_fixed_eps"]:
 
@@ -171,7 +156,7 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
             if smoothing_type in ["weighted_vary_eps", "uniform_vary_eps"]:
 
                 if prnt:
-                    print("Smoothing by varying eps")
+                    print("Smoothing by", smoothing_type)
 
                 for c in range(adj_matrix.shape[1]):
 
@@ -209,21 +194,21 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
                     # add pm the new eps in proportion to adjacency
                     assert eps[:,c].shape == new_eps.shape
                     eps[:, c] += new_eps 
-                    
+            
+            # Break from epsilon weighting (where required)
+            # check the weighting is correct
             if prnt:
                 print("Resulting Epsilon:\n", eps)
-            
+
             ## WEIGHT THE SMOOTHING - based off eps size ##
+
             for i in range(n_class):
                 
                 # Set the class-class smoothing values
                 smooth_tens[:, i, i] = 1. - eps[:, i]
                 
-                # Set the non-self smoothing magnitudes
+                # Set the non-self smoothing magnitudes - uniform case
                 if smoothing_type == "uniform_vary_eps":
-                    
-                    if prnt:
-                        print("Smoothing by uniform vary eps")
 
                     rest = np.zeros((n_batch, n_class - 1))
 
@@ -242,10 +227,11 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
                         if i + 1 < smooth_tens.shape[1]:
                             smooth_tens[b, i, (i+1):] = rest[b, i:]
 
+                # Set the non-self smoothing magnitudes - weighted cases
                 elif smoothing_type in ["weighted_vary_eps", "weighted_fixed_eps"]:
 
                     if prnt:
-                        print("Weighted smoothing")
+                        print("Entering weighted smoothing")
                     
                     # Do the weighting on the non-self-adjacency if weighted
                     if i == smooth_tens.shape[1] - 1:
@@ -272,35 +258,19 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
                         if i + 1 < smooth_tens.shape[1]:
                             smooth_tens[b, i, (i+1):] = rest[b, i:]
 
-                #if prnt:
-                #    print("Smoothing was varied eps into all (other) classes for class", i, "\n", rest)
+            ## SMOOTH TENSOR IS NOW BUILT ##
 
             if prnt:
                 for b in range(n_batch):
                     print("Reconstructed smoothing tensors batch", b, "\n", smooth_tens[b])
 
-
-            # Check the smooth matrix for (approx) normalisation
-            # COULD normalise but it doesn't work very consistently
+            # Check the smooth matrix for (approx) normalisation - actual wasn't consistent
             assert (smooth_tens.sum(axis=(-1)) < 1.0001).all()
             assert (smooth_tens.sum(axis=(-1)) > 0.9999).all()
 
-            ## BUILD THE ONE-HOT LABEL UP ##
+            ## BUILD THE ONE-HOT LABEL UP for every pixel ##
 
-            """
-            Using:
-                ONE_HOT - the currently one-hot labels to be smoothed
-                GOLD - 1 is tensor of one-hot indices
-                SMOOTH_TENS[b,gold,:] - the values that one_hot[i,:,k,l] should take
-            """
-
-            # for testing
-            old_one_hot = one_hot.clone()
-            old_max_indices = torch.argmax(old_one_hot, dim=1, keepdim=False)
-
-            ########### CHANGING AROUND ##############
             # Use the smoothing matrix and gold
-            # TODO - check sampling from batches correctly
             for b in range(n_batch):
 
                 # (9,9) matrix of class:smoothing
@@ -308,77 +278,59 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
 
                 # the one hot tensor per cell (9, 512, 512) is this_image_smooth(class, :), flipped
                 np_tens = np.moveaxis(this_image_smooth[gold[b,:,:].cpu().numpy(), :], 2, 0)
-                
-                #print(np_tens[:, 256, 256])
 
                 one_hot[b, :, :, :] = torch.from_numpy(np_tens).to(gold.device).float()
-
-            assert one_hot.shape == old_one_hot.shape
-
-            """
-            # Works for batch size 1 ut casts np tens to (8,8,512,512)
-            for c in range(one_hot.shape[1]):
-                
-                print("gold shape", gold.shape)
-                print("one hot [c] shape", one_hot[:,c,:,:].shape)
-                
-                np_tens = smooth_tens[:, gold[:,:,:].cpu().numpy(), c]
-
-                print("np tens", np_tens.shape)
-                
-                one_hot[:,c,:,:] = torch.from_numpy(np_tens).to(gold.device).float()
-            """
-            ########################################
-
-            new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
-
-            # Do some view-testing (before asserting structure is maintained)
-            if prnt:
-                print("Testing old and new one hots")
-
-                for j in np.arange(150, 350, 25):
-                    print("argmax (256,", j, ")", old_max_indices[0,256,j])
-                    print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
-                    print("one_hot (256,", j, ")", one_hot[0,:,256,j])
-                
-            # Assert that structure has been maintained!
-            assert old_max_indices.shape == new_max_indices.shape
-            assert (old_max_indices[0] == new_max_indices[0]).all()
-            assert (old_max_indices == new_max_indices).all()
-
-            # no longer needed
-            del old_one_hot, old_max_indices, new_max_indices
-
-            # Check that each one-hot abel still sums to (approx) 1.
-            assert (one_hot.sum(dim=1, keepdim=True) < 1.0001).all()
-            assert (one_hot.sum(dim=1, keepdim=True) > 0.9999).all()
 
         elif smoothing_type == "none":
             if prnt:
                 print("No smoothing applied. One hot:")
                 print(one_hot[0,:,0,0])
-            pass
         
         else:
+            
             # If none of the 4 smoothing regimes
             raise NotImplementedError("Smoothing type" + smoothing_type + "not implemented")
 
-        ## NOW CALC LOSS ##
-        
-        ## TODO - run through what CE Loss is properly, decide where I need to remove loss ##
+        ## ABOVE just gets one hot smoothing ##
 
-        # Pred is output integers - finds the log probability
+        # Do some view-testing (before asserting structure is maintained)
+        
+        assert one_hot.shape == old_one_hot.shape
+
+        new_max_indices = torch.argmax(one_hot, dim=1, keepdim=False)
+
+        if prnt:
+            print("Testing old and new one hots")
+
+            for j in np.arange(150, 350, 25):
+                print("argmax (256,", j, ")", old_max_indices[0,256,j])
+                print("old_hot (256,", j, ")", old_one_hot[0,:,256,j])
+                print("one_hot (256,", j, ")", one_hot[0,:,256,j])
+                
+        # Assert that structure has been maintained!
+        assert old_max_indices.shape == new_max_indices.shape
+        assert (old_max_indices == new_max_indices).all()
+
+        # no longer needed
+        del old_one_hot, old_max_indices, new_max_indices
+
+        # Check that each one-hot abel still sums to (approx) 1.
+        assert (one_hot.sum(dim=1, keepdim=True) < 1.0001).all()
+        assert (one_hot.sum(dim=1, keepdim=True) > 0.9999).all()
+
+        ## NOW CALC LOSS ##
+
+        # softmax(pred, dim=1) is output probabilities of each class - find the log probability
         log_prb = F.log_softmax(pred, dim=1)
 
         if prnt:
             print("Using one hot to calc log prob, example:\n", one_hot[0,:,0,0])
             print("Now is softmax = 1 (before log)?\n", 
-                  ((F.softmax(pred, dim=1).sum(dim=1) > 0.999).all() & (F.softmax(pred, dim=1).sum(dim=1) < 1.001).all()))
+                  ((F.softmax(pred, dim=1).sum(dim=1) > 0.999).all() & 
+                   (F.softmax(pred, dim=1).sum(dim=1) < 1.001).all()))
 
-        # Dot the log prob with the one hot (now smoothed) label
-        loss = - (one_hot * log_prb).sum(dim=1)
-
-        # Used to be finding a mask here where class != 0 - think was wrong
+        # Dot the log prob with the one hot (now smoothed) label - for each pixel
+        loss = - (one_hot * log_prb).sum(dim=1) # (b, x, y)
 
         # Clean the dotted loss to be 0 wherever we don't like the input
         if clean == "loss":
@@ -386,22 +338,34 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
             if prnt:
                 print("ENTERING loss cleaning.")
                 print("Old loss:", loss.sum())
-
+            
+            # Reshape input
+            assert inp.size(1) == 1
+            inp = inp.view(inp.size(0), inp.size(2), inp.size(3))
+            
+            # Check masking will fit
+            assert inp.shape == loss.shape
+            assert gold.shape == loss.shape
+            
             # Ignore the labels where input was 1. (white), and class was on the edge
             loss = torch.where(((gold == 0) & (inp == 1.)) | ((gold == 8) & (inp == 1.)), 
                                torch.tensor(0., device=gold.device, dtype=torch.float), 
                                loss)
 
-        # Used to be applying the mask above, here. Now removed
-        loss = loss.sum()
+            if prnt:
+                print("Cleaned loss:", loss.sum())
+                print("Mean per cell", torch.mean(loss))
 
-        if prnt:
-            print("Cleaned loss:", loss)
+        # Sum the new loss
+        loss = loss.sum()
 
     else:
 
         # loss from pred and gold, NOT one-hot
         loss = F.cross_entropy(pred, gold, reduction='sum')
+
+    if prnt:
+        print("Returning loss", loss)
 
     return loss
 

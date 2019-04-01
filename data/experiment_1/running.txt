@@ -1,1 +1,0 @@
-Central, Accuracy, Smoothing_Type,   Time

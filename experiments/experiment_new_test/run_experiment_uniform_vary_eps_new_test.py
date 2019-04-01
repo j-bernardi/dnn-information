@@ -35,7 +35,7 @@ def define_experiment(graph_plotting=False, test_small_slurm=True):
     if graph_plotting:
         smoothing_types = ["none", "uniform_fixed_eps", "uniform_vary_eps", "weighted_fixed_eps", "weighted_vary_eps"]
     else:
-        smoothing_types = ["LOSS_HERE"]
+        smoothing_types = ["uniform_vary_eps"]
     
     N_SO_FAR = 6
     N_REPEATS = 7
@@ -390,8 +390,8 @@ if __name__ == "__main__":
             rf.write("Central, Accuracy, Smoothing_Type,   Time\n")
 
     # Set up system path
-    print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
-    sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
+    print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3] + ["models","unet"]))
+    sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3] + ["models","unet"]))
     import train_segment2d as ts
     import training_metadata as tm
     

@@ -1,4 +1,4 @@
-import torch, os, sys, datetime, time#, torchvision
+import torch, os, sys, datetime, time, random#, torchvision
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
@@ -182,7 +182,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
                      ((outputs.sum(dim=1) > 0.999).all()) & 
                      ((outputs.sum(dim=1) < 1.001).all()))
                      )
-                print("If true - then have a problem with double softmax application")
+                print("If true (e.g. 1) - then have a problem with double softmax application")
 
             # Skip the actual training if desired [for testing]
             if fake:
@@ -220,11 +220,13 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
             central_cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)\
                                 - (shaped_labels == 0).sum().item()\
                                 - (shaped_labels == 8).sum().item()
-        
+            if frst:
+                print("Cells seen", cells_seen)
+            
             # Remove (white and of class 0 or 8) from reporting metrics
             if params["clean"] == "loss":
                 if frst:
-                    print("Removing ignored loss cells from the accuracy calculations")
+                    print("Removing ignored loss cells from the training accuracy calculations")
                 
                 # Class 0 - remove white from correct count
                 class0_remove = ((inputs == 1.) & (shaped_labels == 0))#.view((inputs.size(0), inputs.size(1), inputs.size(2)))
@@ -244,6 +246,9 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
                 # remove white from seen count
                 cells_seen -= (class0_remove).sum().item()
                 cells_seen -= (class8_remove).sum().item()
+            
+            if frst:
+                print("New cells seen", cells_seen)
 
             total_cells_correct += cells_correct.sum().item()
             total_central_cells_correct += central_cells_correct.sum().item()
@@ -297,7 +302,7 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
                 running_cells_seen = 0
 
             # Not the first iteration anymore
-            frst=False
+            frst = False
 
         ## EPOCH COMPLETE ##
 
@@ -400,6 +405,7 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
     """Test the network."""
 
     print("Testing")
+    img_idx_to_print = random.randint(0, len(testloader)-1)
 
     # Create file if it doesn't exist yet 
     reporting_file = experiment_folder + "test_results/"
@@ -458,16 +464,12 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
 
             ## NEW LINE ## - assert probability-like
             if first:
-                print("Example one hot", outputs[0, :, 256, 256])
-
+                print("Example output tensor", outputs[0, :, 256, 256])
 
             ## CALCULATE CONFIDENCES and LABELS ## 
             _, predicted = torch.max(outputs, 1, keepdim=True)
 
-            # Convert to probabilities
-            max_conf_matrix, _ = torch.max(F.log_softmax(outputs, dim=1), 1, keepdim=True)
-
-            # Put the labels in the same shape            
+            # Put the labels in the same shape
             shaped_labels = labels.view(labels.size(0), 1, labels.size(1), labels.size(2))
 
             # Make the predictions and labels one hot
@@ -478,14 +480,21 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             class_tots += torch.sum(one_hot_labels, (0,2,3), keepdim=False)
             predicted_tots += torch.sum(one_hot_predicted, (0,2,3), keepdim=False)
 
-            # The confidences of predicted classes (0s elsewhere - sparse, one-hot rep)
-            this_confs = torch.where(one_hot_predicted == 1, outputs, torch.tensor(0., device=params["device"]))
-            
-            # The total confidence for this image batch
-            total_confs.append(this_confs.sum())
             total_pred_counts.append(one_hot_predicted.sum())
 
+            ## CONFIDENCE ## 
+
+            # Convert whole one hot reps to probabilities
+            probability_matrix = F.softmax(outputs, dim=1)
+
+            # The confidences of predicted classes (0s elsewhere - sparse, prob-hot rep)
+            this_confs = torch.where(one_hot_predicted == 1, probability_matrix, torch.tensor(0., device=params["device"]))
+
+            # The total confidence for this image batch
+            total_confs.append(this_confs.sum())
+
             for c in range(len(classes)):
+
                 class_confs[c, total_batches_seen] = torch.sum(this_confs[:,c,:,:]).item()
 
             ## CALCULATE CORRECTNESS ##
@@ -493,6 +502,9 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             # Basic accuracy
             cells_correct = torch.eq(predicted, shaped_labels.long())
             cells_seen = outputs.size(0) * outputs.size(2) * outputs.size(3)
+
+            if first:
+                print("Cells seen", cells_seen)
 
             # Remove the cells that are white and of class 0 or 8
             if params["clean"] == "loss":
@@ -514,17 +526,24 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
                 cells_seen -= (class0_remove).sum().item()
                 cells_seen -= (class8_remove).sum().item()
 
-                # Class 0 - remove blank cells from predictions indicators
-                one_hot_predicted[:,0,:,:] = torch.where((one_hot_predicted[:,0,:,:] == 1) & (inputs[:,0,:,:] == 1.), 
+                # Class 0 - remove blank cells from predictions indicators by setting to 3
+                # was one_hot_labels[:,0,:,:] == 1) & (inputs[:,0,:,:] == 1.)
+                assert class0_remove.size(1) == 1
+                one_hot_predicted[:,0,:,:] = torch.where(class0_remove.view(class0_remove.size(0), class0_remove.size(2), class0_remove.size(3)) == 1, 
                                                            torch.tensor(3, device=inputs.device, dtype=torch.uint8), 
                                                            one_hot_predicted[:,0,:,:])
             
-                # Class 8 - remove blank cells from predictions indicators
-                one_hot_predicted[:,8,:,:] = torch.where((one_hot_predicted[:,8,:,:] == 1) & (inputs[:,0,:,:] == 1.), 
+                # Class 8 - remove blank cells from predictions indicators by setting to 3
+                # was (one_hot_labels[:,8,:,:] == 1) & (inputs[:,0,:,:] == 1.)
+                assert class8_remove.size(1) == 1
+                one_hot_predicted[:,8,:,:] = torch.where(class8_remove.view(class8_remove.size(0), class8_remove.size(2), class8_remove.size(3)) == 1, 
                                                            torch.tensor(3, device=inputs.device, dtype=torch.uint8), 
                                                            one_hot_predicted[:,8,:,:])
 
-            # Indicators of correctness across the 9 classes
+            if first:
+                print("New cells seen", cells_seen)
+
+            # Indicators of correctness across the 9 classes - 3 won't be caught below
             correct_indicators = one_hot_predicted + one_hot_labels
 
             # 2 if correct positive label
@@ -539,14 +558,12 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             ## CALCULATE ACCURACIES PER CLASS ##
             try:
                 assert correct_mat.sum().item() == cells_correct.sum().item()
-
             except:
-                
                 print("***Assertion error***\n" +\
                       "Correct matrix =", correct_mat.sum().item(),
                       ", cells correct =", cells_correct.sum().item(),
                       "*********************")
-                # Continue
+                # Continue instead of reassert:
                 #assert correct_mat.sum().item() == cells_correct.sum().item()
 
             # Totals
@@ -575,17 +592,19 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
             else:
                 fixed_predictions = predicted
 
-            # Get confusion matrix
+            # Get confusion matrix - use fixed predictions
             this_confusion_mat =\
                get_confusion_matrix(labels.view(-1).cpu().numpy(), 
                                     fixed_predictions.view(-1).cpu().numpy())
 
             ## SAVE first graph for visualising ##
 
-            if first:
-                confusion_mat = this_confusion_mat
+            if total_batches_seen - 1 == img_idx_to_print:
                 if save_graph:
                     save_graphs(inputs, labels, fixed_predictions, og_idx, reporting_file)
+            
+            if first:
+                confusion_mat = this_confusion_mat
             else:
                 confusion_mat += this_confusion_mat
 
