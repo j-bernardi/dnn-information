@@ -177,6 +177,13 @@ def train(unet, trainloader, params, fake=False, experiment_folder="no", total_n
             # Get this batch's outputs - probabilities over 9 classes
             outputs = unet(inputs)
 
+            if frst:
+                print("Outputs sum to 1? (E.g. is output a probability)\n", (
+                     ((outputs.sum(dim=1) > 0.999).all()) & 
+                     ((outputs.sum(dim=1) < 1.001).all()))
+                     )
+                print("If true - then have a problem with double softmax application")
+
             # Skip the actual training if desired [for testing]
             if fake:
                 return outputs.shape, [],[],[],[]
@@ -446,15 +453,19 @@ def test(unet, testloader, params, shape, classes, experiment_folder="no", save_
 
             total_images_seen += inputs.size(0)
 
-            # Get outputs 
+            # Get outputs - converted to a probability in loss function
             outputs = unet(inputs)
 
-            ## NEW LINE ##
-            #assert (outputs.sum(dim=1) > 0.999).all()
-            #assert (outputs.sum(dim=1) < 1.001).all()
+            ## NEW LINE ## - assert probability-like
+            if first:
+                print("Example one hot", outputs[0, :, 256, 256])
+
 
             ## CALCULATE CONFIDENCES and LABELS ## 
-            max_conf_matrix, predicted = torch.max(outputs, 1, keepdim=True)
+            _, predicted = torch.max(outputs, 1, keepdim=True)
+
+            # Convert to probabilities
+            max_conf_matrix, _ = torch.max(F.log_softmax(outputs, dim=1), 1, keepdim=True)
 
             # Put the labels in the same shape            
             shaped_labels = labels.view(labels.size(0), 1, labels.size(1), labels.size(2))

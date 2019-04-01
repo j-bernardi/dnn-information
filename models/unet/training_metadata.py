@@ -367,51 +367,41 @@ def calc_loss(inp, pred, gold, one_hot_flag=True, smoothing_type="uniform_fixed_
         
         ## TODO - run through what CE Loss is properly, decide where I need to remove loss ##
 
-        # log softmax on the hard class integer
+        # Pred is output integers - finds the log probability
         log_prb = F.log_softmax(pred, dim=1)
 
-        # Find where gold is not 0 - WHY?? Not sure if case with label smoothig...
-        # Think I might be removing ALL class=0 here...
-        # Though somehow used to work...
-        non_pad_mask = gold.ne(0)
-
         if prnt:
-            print("Using one hot\n", one_hot[0,:,0,0])
+            print("Using one hot to calc log prob, example:\n", one_hot[0,:,0,0])
+            print("Now is softmax = 1 (before log)?\n", 
+                  ((F.softmax(pred, dim=1).sum(dim=1) > 0.999).all() & (F.softmax(pred, dim=1).sum(dim=1) < 1.001).all()))
 
-        # Either log prob is 0 (e.g. log of 1) or one_hot is 0s
-        loss = -(one_hot * log_prb).sum(dim=1)
+        # Dot the log prob with the one hot (now smoothed) label
+        loss = - (one_hot * log_prb).sum(dim=1)
 
-        # SET loss to 0 everywhere that input is 1. and gold is class 0, 8
-        # E.g. to symbolise classification was exactly right - don't update on broken input
+        # Used to be finding a mask here where class != 0 - think was wrong
+
+        # Clean the dotted loss to be 0 wherever we don't like the input
         if clean == "loss":
             
             if prnt:
                 print("ENTERING loss cleaning.")
-                print("Old loss:", loss.masked_select(non_pad_mask).sum())
+                print("Old loss:", loss.sum())
 
-            # Check setting to 0 is the correct thing to do here
+            # Ignore the labels where input was 1. (white), and class was on the edge
             loss = torch.where(((gold == 0) & (inp == 1.)) | ((gold == 8) & (inp == 1.)), 
                                torch.tensor(0., device=gold.device, dtype=torch.float), 
                                loss)
 
-        """
-        # Original implementation
-        log_prb = F.log_softmax(pred, dim=1)
+        # Used to be applying the mask above, here. Now removed
+        loss = loss.sum()
 
-        non_pad_mask = gold.ne(Constants.PAD) # IGNORES 0 indices!
-        loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
-        """
-
-        # LOSS - does this need to be changed to properly ignore?
-        loss = loss.masked_select(non_pad_mask).sum()
         if prnt:
             print("Cleaned loss:", loss)
 
     else:
 
         # loss from pred and gold, NOT one-hot
-        loss = F.cross_entropy(pred, gold, ignore_index=0, reduction='sum')
+        loss = F.cross_entropy(pred, gold, reduction='sum')
 
     return loss
 
