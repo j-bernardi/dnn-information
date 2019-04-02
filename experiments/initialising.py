@@ -2,6 +2,7 @@
 import os, sys, time, torch, datetime, pickle
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 def initialise_model(params):
     """If no model exists, create one and save it for all."""
@@ -31,31 +32,36 @@ def remake_graph(experiment_folder="data/initialising_loss/"):
     with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
         (lrs, bss, eps, accuracies, accuracies_info, central_accuracies) = pickle.load(f)
 
-    make_heat_map(np.array(lrs) * 1000, bss, accuracies, "total accuracy", experiment_folder)
-    make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)
-    make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
-    make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
+    make_plot(bss, accuracies, "Total", "Batch Size", experiment_folder)
+    make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
+    
+    make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 240))
+    make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 240))
+    
+    make_heat_map(np.array(lrs), bss, accuracies, "total accuracy", experiment_folder)
+    make_heat_map(np.array(lrs), bss, central_accuracies, "central accuracy", experiment_folder)
+    make_plot(np.array(lrs), central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0.00001, 0.1))
+    make_plot(np.array(lrs), accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0.00001, 0.1))
 
     plot_both(eps, accuracies, central_accuracies, experiment_folder)
 
 def define_experiment(test_small_slurm=False):
 
-    # Too computationally expensive to go higher
-    lr_2_eps = [(0.0015, 2, 70)]  # 2.5 hr
+    # Too computationally expensive to go higher than 2, 60
 
-    lr_4_eps = [(0.0002, 4, 180), # 2   hr 
-                (0.0010, 4, 100)] # 1.5 hr
- 
-    lr_6_eps = [(0.0005, 6, 120)] # 1.4 hr
+    lr_4_eps = [(0.005,  4, 180),
+                (0.001, 4, 100)]
 
-    lr_8_eps = [(0.0001, 8, 220), # 1.8 hr
-                (0.0013, 7, 80 )] # 1.3 hr
+    lr_8_eps = [(0.0001, 8, 180),
+                (0.0013, 8, 60 )]
 
-    more_8s = [(0.00005, 8, 220), 
-               (0.00009, 8, 160)]
+    lr_16_eps= [(0.00005, 16, 220), 
+                (0.0008, 16, 160)]
 
-    a_12 = [(0.0001, 12, 180)]
-
+    lr_8_new = [(0.0005,  8, 130),
+                (0.00004, 8, 220),
+                (0.00009, 8, 190)]
+    """
     test_8s = [(0.0001, 8, 60),
                (0.0001, 8, 90),
                (0.0001, 8, 120),
@@ -65,15 +71,11 @@ def define_experiment(test_small_slurm=False):
                (0.0001, 8, 135),
                (0.0001, 8, 165),
                (0.0001, 8, 200)]
-
-    test_low_lr = [(0.00002, 8, 200),
-                   (0.00005, 8, 180)]
+    """
 
     # DEFINE
     cln_types = ["loss"]#, "no_clean"]
-    lr_bs_eps = [test_low_lr[1]]
-    #lr_bs_eps = lr_4_eps + lr_6_eps
-    #lr_bs_eps = lr_2_eps + lr_4_eps
+    lr_bs_eps = lr_8_new
 
     number_samples = -1 # e.g. all
 
@@ -97,7 +99,7 @@ def define_experiment(test_small_slurm=False):
         print("TESTING SMALL SCALE")
         print("*******************")
 
-        lr_bs_eps = [(0.01, 2, 2), (0.005, 4, 2)]
+        lr_bs_eps = [(0.01, 4, 4)]#, (0.005, 4, 2)]
 
     return lr_bs_eps, number_samples, cln_types
 
@@ -161,8 +163,8 @@ def run_experiment(unet, params, trainloader, testloader, classes, experiment_fo
 
     return fn, acc, central_acc, accuracy_mean_val[-1], central_accuracy_mean_val[-1]
 
-def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,14)):
-    """Makes an ordered plot of y on x."""
+def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,20)):
+    """Makes an ordered plot of y on log x."""
     
     ordered_y = [i for _, i in sorted(zip(x, y))]
     ordered_x = sorted(x)
@@ -178,10 +180,15 @@ def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,14)):
     
     plt.xlim(xlim)
     
-    if "learning" in title.lower():
-        plt.xlabel("Learning rate_0 (10^-3)")
+    if "learn" in title.lower():
+        plt.xlabel("Initial learning rate")
+        plt.xscale("log")
     else:
         plt.xlabel(title)
+        plt.xscale("linear")
+
+    if "batch" in title.lower():
+        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
     
     plt.ylabel("Accuracy")
     plt.savefig(experiment_folder + acc_type+ "_accuracy_on_" + title.lower().replace(" ", "_") + ".png")
@@ -233,6 +240,7 @@ def plot_both(epochs, y1, y2, experiment_folder, xlim=(40,240)):
     plt.close()
 
 def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
+    """LOG xscale"""
 
     plt.figure()
     sc = plt.scatter(lrs, bss, c=accuracies, s=250, 
@@ -243,12 +251,56 @@ def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
 
     plt.colorbar(sc)
     plt.title("Parameter grid search - " + title.lower())
-    plt.xlabel("LR_0 (10^-3)")
-    plt.xlim((0, 2))
+    plt.xlabel("Initial learning rate)")
+    plt.xscale('log')
+    plt.xlim((0.00001, 0.1))
     plt.ylabel("Batch Size")
-    plt.ylim((0, 14))
+    plt.ylim((0, 20))
+    plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
     plt.savefig(experiment_folder + title.lower().replace(" ", "_") + "_grid.png")
     plt.close()
+
+def remove_experiment_from_dict(experiment_folder="data/initialising_loss/"):
+
+    remove_lr = 0.01
+    remove_ep = 4
+    remove_bs = 4
+    new_lrs, new_bss, new_eps, new_accuracies, new_info, new_central =\
+    [], [], [], [], [], []
+    # Open
+    with open(experiment_folder + "pickled_record.pickle", 'rb') as f:
+        (lrs, bss, eps, accuracies, accuracies_info, central_accuracies) = pickle.load(f)
+
+    for i in range(len(lrs)):
+        
+        if (lrs[i] == remove_lr) and\
+           (eps[i] == remove_ep) and\
+           (bss[i] == remove_bs):
+            
+            print("REMOVING")
+            continue
+        
+        else:
+            new_lrs.append(lrs[i])
+            new_bss.append(bss[i])
+            new_eps.append(eps[i])
+            new_accuracies.append(accuracies[i])
+            new_info.append(accuracies_info[i])
+            new_central.append(central_accuracies[i])
+
+    try:
+        assert len(lrs) - 1 == len(new_lrs)
+    except:
+        print("No changes were made!")
+        return
+
+    # Resave If changes were made
+    with open(experiment_folder + "pickled_record_old.pickle", 'wb') as f:
+        pickle.dump((lrs, bss, eps, accuracies, accuracies_info, central_accuracies), f)
+
+    # Resave before messing
+    with open(experiment_folder + "pickled_record.pickle", 'wb') as f:
+        pickle.dump((new_lrs, new_bss, new_eps, new_accuracies, new_info, new_central), f)    
 
 if __name__ == "__main__":
 
@@ -257,6 +309,7 @@ if __name__ == "__main__":
     #remake_graph(experiment_folder="data/initialising_no_clean/")
     sys.exit()
     """
+    
     
     # Track time for whole script
     TIME_TOTAL = time.time()
@@ -269,7 +322,7 @@ if __name__ == "__main__":
     import train_segment2d as ts
     import training_metadata as tm
     
-    # Copy over default parameters        
+    # Copy over default parameters
     params = tm.get_params()
 
     # Load up the experiment we want to run
@@ -366,23 +419,26 @@ if __name__ == "__main__":
 
             ## Make running plots - overwrite old ones ##
 
+            remake_graph(experiment_folder=experiment_folder)
+            """            
             make_plot(bss, accuracies, "Total", "Batch Size", experiment_folder)
             make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
-            make_plot(np.array(lrs) * 1000, accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
-            make_plot(np.array(lrs) * 1000, central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
+            make_plot(np.array(lrs), accuracies, "Total", "Learning Rate_0", experiment_folder, xlim=(0,2))
+            make_plot(np.array(lrs), central_accuracies, "Central", "Learning Rate_0", experiment_folder, xlim=(0,2))
             
             make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 240))
             make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 240))
-
+            
             try:
                 plot_both(eps, accuracies, central_accuracies, experiment_folder)
             except:
                 print("UNTESTED epochs failure.")
-
+            
 
             # PLOT PARAMETER SEARCH GRID
-            make_heat_map(np.array(lrs) * 1000, bss, central_accuracies, "central accuracy", experiment_folder)
-            make_heat_map(np.array(lrs) * 1000, bss, accuracies, "total accuracy", experiment_folder)
+            make_heat_map(np.array(lrs), bss, central_accuracies, "central accuracy", experiment_folder)
+            make_heat_map(np.array(lrs), bss, accuracies, "total accuracy", experiment_folder)
+            """
 
             print("Completed run at", datetime.datetime.now())
             print("Time for run %.3f hrs" % ((time.time() - TIME_RUN) / (60**2)))

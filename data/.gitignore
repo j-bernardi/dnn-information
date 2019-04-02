@@ -1,3 +1,5 @@
 __pycache__
 input_tensors/*
 old_data/*
+initialising_loss
+initialising_no_clean

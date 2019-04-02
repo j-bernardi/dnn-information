@@ -362,7 +362,7 @@ if __name__ == "__main__":
     ## FILE HANDLING ##
 
     # Set the experiment number
-    experiment_number = "1"
+    experiment_number = "2"
 
     # Set the meta folder
     experiment_folder = "data/experiment_" + experiment_number + "/"

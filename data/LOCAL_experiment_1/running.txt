@@ -1,6 +1,0 @@
-Central, Accuracy, Smoothing_Type,   Time
-8.554, 29.149, data/LOCAL_experiment_1/none_lr02_ep1_bs1_6/, 0.010
-19.756, 71.429, data/LOCAL_experiment_1/uniform_fixed_eps_lr02_ep1_bs1_6/, 0.008
-8.200, 57.738, data/LOCAL_experiment_1/uniform_vary_eps_lr02_ep1_bs1_6/, 0.007
-29.425, 64.865, data/LOCAL_experiment_1/weighted_fixed_eps_lr02_ep1_bs1_6/, 0.008
-8.132, 65.403, data/LOCAL_experiment_1/weighted_vary_eps_lr02_ep1_bs1_6/, 0.008
