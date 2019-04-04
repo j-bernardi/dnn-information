@@ -30,17 +30,17 @@ def initialise_model(params):
 def define_experiment(graph_plotting=False, test_small_slurm=True):
 
     # DEFINE
-    cln_type = "loss"
+    cln_type = "no_clean"
 
     if graph_plotting:
         smoothing_types = ["none", "uniform_fixed_eps", "uniform_vary_eps", "weighted_fixed_eps", "weighted_vary_eps"]
     else:
         smoothing_types = ["LOSS_HERE"]
     
-    N_SO_FAR = 6
-    N_REPEATS = 7
+    N_SO_FAR = 0
+    N_REPEATS = 5 # E.g. runs (N_REPEATS - N_SO_FAR) repeat experiments
 
-    ## TODO : fix h params
+    ## TODO : fix # epochs
     lr_bs_eps = (0.0001, 8, 180)
 
     number_samples = -1 # e.g. all

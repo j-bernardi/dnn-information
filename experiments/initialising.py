@@ -61,8 +61,8 @@ def define_experiment(test_small_slurm=False):
     lr_8_new = [(0.0005,  8, 130),
                 (0.00004, 8, 220),
                 (0.00009, 8, 190)]
-    """
-    test_8s = [(0.0001, 8, 60),
+    
+    test_8s = [(0.0001, 8, 60), #0
                (0.0001, 8, 90),
                (0.0001, 8, 120),
                (0.0001, 8, 180),
@@ -70,12 +70,17 @@ def define_experiment(test_small_slurm=False):
                (0.0001, 8, 150),
                (0.0001, 8, 135),
                (0.0001, 8, 165),
-               (0.0001, 8, 200)]
-    """
+               (0.0001, 8, 200), #8
+
+               (0.0001, 8, 143),
+               (0.0001, 8, 158),
+               (0.0001, 8, 240),
+               (0.0001, 8, 260),
+               (0.0001, 8, 300)]
 
     # DEFINE
-    cln_types = ["loss"]#, "no_clean"]
-    lr_bs_eps = lr_8_new
+    cln_types = ["no_clean"]#, "no_clean"]
+    lr_bs_eps = [test_8s[13]]
 
     number_samples = -1 # e.g. all
 
@@ -202,7 +207,7 @@ def plot_both(epochs, y1, y2, experiment_folder, xlim=(40,240)):
     y3, y4 = [], []
     these_epochs = []
 
-    for e in [60,90,120,135,150,165,180,200,220]:
+    for e in [60,90,120,135,150,165,180,200,220, 240, 260, 300]:
         
         fn = "uniform_fixed_eps_lr0001_ep"+ str(e) + "_bs8/"
         
@@ -305,8 +310,8 @@ def remove_experiment_from_dict(experiment_folder="data/initialising_loss/"):
 if __name__ == "__main__":
 
     """
-    remake_graph(experiment_folder="data/initialising_loss/")
-    #remake_graph(experiment_folder="data/initialising_no_clean/")
+    #remake_graph(experiment_folder="data/initialising_loss/")
+    remake_graph(experiment_folder="data/initialising_no_clean/")
     sys.exit()
     """
     
