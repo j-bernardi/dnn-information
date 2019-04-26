@@ -35,7 +35,7 @@ def define_experiment(graph_plotting=False, test_small_slurm=False):
     if graph_plotting:
         smoothing_types = ["none", "uniform_fixed_eps", "uniform_vary_eps", "weighted_fixed_eps", "weighted_vary_eps"]
     else:
-        smoothing_types = ["LOSS_HERE"]
+        smoothing_types = ["uniform_vary_eps"]
     
     N_SO_FAR = 0
     N_REPEATS = 5 # E.g. runs (N_REPEATS - N_SO_FAR) repeat experiments
@@ -205,7 +205,6 @@ def plot_test_results(results_dict, experiment_folder, acc_type="accuracies"):
     plt.ylabel("Accuracy achieved %")
     plt.title(acc_type.replace("_", " ") + "achieved for each smoothing type")
     
-    plt.ylim((70, 90))
     y_val = max(avg_accs) / 2
     for i, v in enumerate(avg_accs):
         plt.text(i -.15  , y_val, ("%.2f \n +/- \n %.2f" % (v, stds[i])) , color="black")
@@ -252,7 +251,7 @@ def plot_uncertainty_confusion(results_dict, file_to):
             # Plot the std as the colors with 0 as white
 
             # Sort the heatmap
-            cmap = plt.cm.YlOrRd
+            cmap = plt.cm.RdYlBu
             cmaplist=[cmap(i) for i in range(cmap.N)]
             cmaplist.reverse()
             cmaplist[0] =(1.,1.,1., 1.0) # set 0 to white
@@ -354,7 +353,7 @@ def remove_from_dict(experiment_folder):
 if __name__ == "__main__":
 
     # True if just want to load in and update the graphs
-    skip = True
+    skip = False
 
     # Track time for whole script
     print("Script started at", datetime.datetime.now())
@@ -391,8 +390,8 @@ if __name__ == "__main__":
             rf.write("Central, Accuracy, Smoothing_Type,   Time\n")
 
     # Set up system path
-    print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
-    sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-2] + ["models","unet"]))
+    print("appending", os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3] + ["models","unet"]))
+    sys.path.append(os.sep.join(os.path.realpath(__file__).split(os.sep)[:-3] + ["models","unet"]))
     import train_segment2d as ts
     import training_metadata as tm
     

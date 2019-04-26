@@ -35,8 +35,8 @@ def remake_graph(experiment_folder="data/initialising_loss/"):
     make_plot(bss, accuracies, "Total", "Batch Size", experiment_folder)
     make_plot(bss, central_accuracies, "Central", "Batch Size", experiment_folder)
     
-    make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 240))
-    make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 240))
+    make_plot(np.array(eps), accuracies, "Total", "Epochs", experiment_folder, xlim=(40, 320))
+    make_plot(np.array(eps), central_accuracies, "Central", "Epochs", experiment_folder, xlim=(40, 320))
     
     make_heat_map(np.array(lrs), bss, accuracies, "total accuracy", experiment_folder)
     make_heat_map(np.array(lrs), bss, central_accuracies, "central accuracy", experiment_folder)
@@ -199,7 +199,7 @@ def make_plot(x, y, acc_type, title, experiment_folder, xlim=(0,20)):
     plt.savefig(experiment_folder + acc_type+ "_accuracy_on_" + title.lower().replace(" ", "_") + ".png")
     plt.close()
 
-def plot_both(epochs, y1, y2, experiment_folder, xlim=(40,240)):
+def plot_both(epochs, y1, y2, experiment_folder, xlim=(40,320)):
 
     ordered_y1 = [i for _, i in sorted(zip(epochs, y1))]
     ordered_y2 = [i for _, i in sorted(zip(epochs, y2))]
@@ -243,6 +243,11 @@ def plot_both(epochs, y1, y2, experiment_folder, xlim=(40,240)):
     plt.savefig(experiment_folder +"compare_accuracy_epochs.png")
     
     plt.close()
+
+    max_test = max(y2)
+    max_idx = y2.index(max_test)
+    print("max of central accuracies", max_test, "at epochs", epochs[max_idx])
+    print("accuracy at 150 epochs", y2[epochs.index(150)])
 
 def make_heat_map(lrs, bss, accuracies, title, experiment_folder):
     """LOG xscale"""
@@ -314,7 +319,6 @@ if __name__ == "__main__":
     remake_graph(experiment_folder="data/initialising_no_clean/")
     sys.exit()
     """
-    
     
     # Track time for whole script
     TIME_TOTAL = time.time()
