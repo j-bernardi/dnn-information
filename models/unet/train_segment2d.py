@@ -734,7 +734,7 @@ def save_graphs(inputs, labels, predicted, og_idx, reporting_file):
 
     return
 
-def save_confusion(mat, classes, to_file):
+def save_confusion(mat, classes, to_file, title_append=""):
     """Saves matrix plot to file and dumps."""
 
     mat.dump(to_file + ".pkl")
@@ -753,6 +753,8 @@ def save_confusion(mat, classes, to_file):
         title = "Confusion Matrix"
         cmap = plt.cm.Blues
         thresh = mat.max() / 2.
+
+    title += title_append
 
     fig, ax = plt.subplots()
 

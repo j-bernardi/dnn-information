@@ -203,9 +203,13 @@ def plot_test_results(results_dict, experiment_folder, acc_type="accuracies"):
         plt.xticks(x_pos, nms)
 
     plt.ylabel("Accuracy achieved %")
-    plt.title(acc_type.replace("_", " ") + "achieved for each smoothing type")
+    plt.title(acc_type.replace("_", " ") + " achieved for each smoothing type")
+
+    if "central" in acc_type:
+        plt.ylim((80, 90))
+    else:
+        plt.ylim((90.100))
     
-    plt.ylim((70, 90))
     y_val = max(avg_accs) / 2
     for i, v in enumerate(avg_accs):
         plt.text(i -.15  , y_val, ("%.2f \n +/- \n %.2f" % (v, stds[i])) , color="black")
@@ -229,8 +233,8 @@ def plot_confusion_matrices(results_dict, file_to):
             avg_norm_confusion = norm_conf_mat.sum(axis=0) / conf_mat.shape[0]
         
             # TODO - decide how I'm going to display uncertainty in the confusion matrix
-            ts.save_confusion(avg_confusion, classes, "/".join(file_to.split("/")[:-2]) + "/avg_confusion_" + st)
-            ts.save_confusion(avg_norm_confusion, classes, "/".join(file_to.split("/")[:-2]) + "/avg_norm_confusion_" + st)
+            ts.save_confusion(avg_confusion, classes, "/".join(file_to.split("/")[:-2]) + "/avg_confusion_" + st, title_append=(" - "+st.lower()))
+            ts.save_confusion(avg_norm_confusion, classes, "/".join(file_to.split("/")[:-2]) + "/avg_norm_confusion_" + st, title_append=(" - "+st.lower()))
 
 def plot_uncertainty_confusion(results_dict, file_to):
     """Plot confusion matrix with shading as the present colour."""
@@ -252,12 +256,14 @@ def plot_uncertainty_confusion(results_dict, file_to):
             # Plot the std as the colors with 0 as white
 
             # Sort the heatmap
-            cmap = plt.cm.YlOrRd
+            cmap = plt.cm.YlOrRd_r
+            # threshold for starting white text (cmap dependent)
+            thresh = 0.02
+
             cmaplist=[cmap(i) for i in range(cmap.N)]
             cmaplist.reverse()
             cmaplist[0] =(1.,1.,1., 1.0) # set 0 to white
             cmap = mpl.colors.LinearSegmentedColormap.from_list('Custom cmap', cmaplist, cmap.N)
-            thresh = std.max() / cmap.N
 
             fig, ax = plt.subplots()
 
@@ -514,6 +520,9 @@ if __name__ == "__main__":
 
             print("Completed run at", datetime.datetime.now())
             print("Time for run %.3f hrs" % ((time.time() - TIME_RUN) / (60**2)))
+
+        if skip:
+            break
 
     ## ANALYSIS ##
     if not skip:
